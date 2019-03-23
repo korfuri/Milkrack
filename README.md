@@ -16,4 +16,23 @@ etc.
   to build projectM
 * `make` Milkrack itself
 
+## Troubleshooting
+
+### no matching function for call to `min(float, error)'
+
+If you're getting this kind of errors:
+
+```
+Failed to link program: error: linking with uncompiled shader
+Failed to compile shader 'Fragment: blur2'. Error: 0:30(62): error: could not implicitly convert operands to arithmetic operator
+0:30(12): error: no matching function for call to `min(float, error)'; candidates are:
+0:30(12): error:    float min(float, float)
+(...)
+Failed to link program: error: linking with uncompiled shader
+```
+
+Try applying [this patch](https://gist.github.com/deltaoscarmike/5f53db9d6bbfeafad95104a78327fca1) to projectM.
+
+## License
+
 This plugin is released under LGPL.
