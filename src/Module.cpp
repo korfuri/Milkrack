@@ -63,6 +63,7 @@ struct ProjectMWidget : FramebufferWidget {
     s.presetURL = "/home/korfuri/Code/Rack-SDK/plugins/Milkrack/src/deps/projectm/presets/presets_projectM/";
     pm = new projectM(s);
     texture = pm->initRenderToTexture();
+    setAutoplay(false);
     nextPreset();
   }
 
@@ -84,7 +85,13 @@ struct ProjectMWidget : FramebufferWidget {
     }
   }
 
-  std::string activePreset() {
+  unsigned int activePreset() const {
+    unsigned int presetIdx;
+    pm->selectedPresetIndex(presetIdx);
+    return presetIdx;
+  }
+
+  std::string activePresetName() const {
     unsigned int presetIdx;
     if (pm->selectedPresetIndex(presetIdx)) {
      return pm->getPresetName(presetIdx);
@@ -112,7 +119,7 @@ struct ProjectMWidget : FramebufferWidget {
       nvgFontSize(vg, 14);
       nvgFontFaceId(vg, font->handle);
       nvgTextAlign(vg, NVG_ALIGN_BOTTOM);
-      nvgText(vg, 10, 20, activePreset().c_str(), nullptr);
+      nvgText(vg, 10, 20, activePresetName().c_str(), nullptr);
       nvgFill(vg);
       nvgClosePath(vg);
       nvgRestore(vg);
@@ -125,9 +132,82 @@ struct ProjectMWidget : FramebufferWidget {
       pm->selectPreset(rand() % n);
     }
   }
+
+  void setPreset(unsigned int i) {
+    unsigned int n = pm->getPlaylistSize();
+    if (n && i < n) {
+      pm->selectPreset(i);
+    }
+  }
+
+  void setAutoplay(bool enable) {
+    pm->setPresetLock(!enable);
+  }
+
+  bool isAutoplayEnabled() const {
+    return pm->isPresetLocked();
+  }
+
+  std::list<std::pair<unsigned int, std::string> > listPresets() {
+    std::list<std::pair<unsigned int, std::string> > presets;
+    unsigned int n = pm->getPlaylistSize();
+    if (!n) {
+      return presets;
+    }
+    for (unsigned int i = 0; i < n; ++i){
+      presets.push_back(std::make_pair(i, std::string(pm->getPresetName(i))));
+    }
+    return presets;
+  }
 };
 
+
+struct SetPresetMenuItem : MenuItem {
+  ProjectMWidget* w;
+  unsigned int presetId;
+
+  void onAction(EventAction& e) override {
+    w->setPreset(presetId);
+  }
+
+  void step() override {
+    rightText = (w->activePreset() == presetId) ? "<<" : "";
+    MenuItem::step();
+  }
+
+  static SetPresetMenuItem* construct(std::string label, unsigned int i, ProjectMWidget* w) {
+    SetPresetMenuItem* m = new SetPresetMenuItem;
+    m->w = w;
+    m->presetId = i;
+    m->text = label;
+    return m;
+  }
+};
+
+struct ToggleAutoplayMenuItem : MenuItem {
+  ProjectMWidget* w;
+
+  void onAction(EventAction& e) override {
+    w->setAutoplay(!w->isAutoplayEnabled());
+  }
+
+  void step() override {
+    rightText = (w->isAutoplayEnabled() ? "no" : "yes");
+    MenuItem::step();
+  }
+
+  static ToggleAutoplayMenuItem* construct(std::string label, ProjectMWidget* w) {
+    ToggleAutoplayMenuItem* m = new ToggleAutoplayMenuItem;
+    m->w = w;
+    m->text = label;
+    return m;
+  }
+};
+
+
 struct MilkrackModuleWidget : ModuleWidget {
+  ProjectMWidget* w;
+
   MilkrackModuleWidget(MilkrackModule *module) : ModuleWidget(module) {
     setPanel(SVG::load(assetPlugin(plugin, "res/MilkrackModule.svg")));
 
@@ -137,10 +217,30 @@ struct MilkrackModuleWidget : ModuleWidget {
     addParam(ParamWidget::create<TL1105>(Vec(19, 150), module, MilkrackModule::NEXT_PRESET_PARAM, 0.0, 1.0, 0.0));
 
     std::shared_ptr<Font> font = Font::load(assetPlugin(plugin, "res/fonts/LiberationSans/LiberationSans-Regular.ttf"));
-    ProjectMWidget* w = Widget::create<ProjectMWidget>(Vec(50, 10));
+    w = Widget::create<ProjectMWidget>(Vec(50, 10));
     w->module = module;
     w->font = font;
     addChild(w);
+  }
+
+  void randomize() override {
+    w->nextPreset();
+  }
+
+  void appendContextMenu(Menu* menu) override {
+    MilkrackModule* m = dynamic_cast<MilkrackModule*>(module);
+    assert(m);
+
+    menu->addChild(construct<MenuLabel>());
+    menu->addChild(construct<MenuLabel>(&MenuLabel::text, "Options"));
+    menu->addChild(ToggleAutoplayMenuItem::construct("Cycle through presets", w));
+
+    menu->addChild(construct<MenuLabel>());
+    menu->addChild(construct<MenuLabel>(&MenuLabel::text, "Preset"));
+    auto presets = w->listPresets();
+    for (auto p : presets) {
+      menu->addChild(SetPresetMenuItem::construct(p.second, p.first, w));
+    }
   }
 };
 
