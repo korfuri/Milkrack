@@ -1,0 +1,3 @@
+[submodule "projectM"]
+	path = src/deps/projectm
+	url = https://github.com/projectM-visualizer/projectm.git
