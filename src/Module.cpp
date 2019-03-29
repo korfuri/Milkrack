@@ -58,13 +58,19 @@ struct ProjectMWidget : FramebufferWidget {
   bool debug = true;
   std::shared_ptr<Font> font;
 
-  ProjectMWidget() {
+  ProjectMWidget(std::string presetURL) {
     projectM::Settings s;
-    s.presetURL = "/home/korfuri/Code/Rack-SDK/plugins/Milkrack/src/deps/projectm/presets/presets_projectM/";
+    s.presetURL = presetURL;
     pm = new projectM(s);
     texture = pm->initRenderToTexture();
     setAutoplay(false);
     nextPreset();
+  }
+
+  static ProjectMWidget* create(Vec pos, std::string presetURL) {
+    ProjectMWidget* p = new ProjectMWidget(presetURL);
+    p->box.pos = pos;
+    return p;
   }
 
   ~ProjectMWidget() {
@@ -217,7 +223,7 @@ struct MilkrackModuleWidget : ModuleWidget {
     addParam(ParamWidget::create<TL1105>(Vec(19, 150), module, MilkrackModule::NEXT_PRESET_PARAM, 0.0, 1.0, 0.0));
 
     std::shared_ptr<Font> font = Font::load(assetPlugin(plugin, "res/fonts/LiberationSans/LiberationSans-Regular.ttf"));
-    w = Widget::create<ProjectMWidget>(Vec(50, 10));
+    w = ProjectMWidget::create(Vec(50, 10), assetPlugin(plugin, "src/deps/projectm/presets/presets_projectM/"));
     w->module = module;
     w->font = font;
     addChild(w);
