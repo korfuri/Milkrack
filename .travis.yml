@@ -1,0 +1,58 @@
+language: cpp
+
+matrix:
+  include:
+  - os: linux
+    dist: xenial
+  - os: osx
+
+addons:
+  apt:
+    packages:
+      - autoconf
+      - libtool
+      - libglm-dev
+      - libgles2-mesa-dev
+      - libgl1-mesa-dev
+  homebrew:
+    packages:
+      - glm
+      - sdl2
+      - automake
+      - libtool
+      - pkg-config
+
+git:
+  submodules: true
+
+env:
+  global:
+    - MAKEFLAGS="-j 2"
+
+install:
+- mkdir -p "${HOME}"/Rack
+- pushd "${HOME}"/Rack
+- curl -o Rack-SDK.zip https://vcvrack.com/downloads/Rack-SDK-0.6.2.zip
+- unzip Rack-SDK.zip
+- popd
+
+script:
+- export RACK_DIR="${HOME}"/Rack/Rack-SDK
+- pushd src/deps/projectm
+- git apply ../projectm_fix_shader.diff
+- ./autogen.sh
+- ./configure --with-pic --enable-static --enable-gles
+- make
+- popd
+- make dist
+
+deploy:
+  provider: releases
+  api_key:
+    secure: RKIjpBO1nmcOFfEZsSubk/KbDwASMLEEX0zv38VjZS6ChvF8mfq14Jim9kw8XXzV3P9jbVF0QWIs9PEYwCjOGEpuykReS5G6x1fsDbw62j8muBW4CS43h+IwQol65x9G46e4xQ7FhXf/9EzUTwejqSF4L08xowA+/2A1sj8UtVhGCl2bgh68ADsRlsUIGABKcyOOLiHOwnt+CydAalixUYje8bqpiEuJYQTrTtDWtH39Ve8dak2mdK2FxrgT2wU0VSSwlNFimGy3snSX95NYyz+H2JglmjxxFczCOZPwN3XGAeoGO+Fy2jhv7OMCxgzrWVwSM6gEImMa4WJHTFnCVNLfBNQ8ZQoDOx5MmE2bK8eah0IK6a0wau9GfGyfRGLN7fX/WNSI7gp2OKjLLusSgLHXHOn7eDqabYol6p3Ea1akmHiLBnwCzG7uLncF9I/p4twEpnqFN2QRqSyIJqT3TlzWdVfZLWL2/1zHDSjCNDHTcIMaDyLLwHtwXGZhDB6gCjDVqNljipnNCAfH8k6CEdelByn7JugrBHk2TljFaYWcSD0Dyp2dsagDOjEykWAgZKwwBR15dgp4jbONvtAwbZU1NlDvqwfhbkEAW3dlEQJ7aTbglDnNrdVJjD1rAmv2wkiIKso5q/EDDFxeADVZ5C3J/duHbmLIrHnjhMbya44=
+  file_glob: true
+  file: dist/Milkrack-*-*.zip
+  skip_cleanup: true  # Don't remove dist/ before uploading files
+  on:
+    repo: korfuri/Milkrack
+    tags: true

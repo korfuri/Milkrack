@@ -1,0 +1,13 @@
+diff --git a/src/libprojectM/Renderer/ShaderEngine.cpp b/src/libprojectM/Renderer/ShaderEngine.cpp
+index 218f6c5e..ab7a45ff 100644
+--- a/src/libprojectM/Renderer/ShaderEngine.cpp
++++ b/src/libprojectM/Renderer/ShaderEngine.cpp
+@@ -374,7 +374,7 @@ std::string blur2_frag(
+     "   #define w_div   _c6.x\n"
+     ""
+     "   // note: if you just take one sample at exactly uv.xy, you get an avg of 4 pixels.\n"
+-    "   vec2 uv2 = fragment_texture.xy + srctexsize.zw*vec2(0,0);     // + moves blur UP, LEFT by TWO-pixel increments! (since texture is 1/2 the size of blur1_ps)\n"
++    "   vec2 uv2 = fragment_texture.xy + srctexsize.zw*vec2(0.0,0.0);     // + moves blur UP, LEFT by TWO-pixel increments! (since texture is 1/2 the size of blur1_ps)\n"
+     ""
+     "   vec3 blur = \n"
+     "           ( texture( texture_sampler, uv2 + vec2(0, d1*srctexsize.w) ).xyz\n"

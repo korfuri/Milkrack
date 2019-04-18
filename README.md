@@ -12,7 +12,7 @@ etc.
 
 * Git clone Milkrack under your `plugins` directory
 * `git submodule init` and `git submodule update`
-* `(cd src/deps/projectm && ./configure --with-pics --enable-gles && make)`
+* `(cd src/deps/projectm && ./configure --with-pic --enable-static --enable-gles && make)`
   to build projectM
 * `make` Milkrack itself
 

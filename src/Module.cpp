@@ -1,4 +1,8 @@
+#if defined(__APPLE__)
+#include <OpenGL/gl.h>
+#else
 #include <GL/gl.h>
+#endif
 #define NANOVG_GL2
 #include "Milkrack.hpp"
 #include "widgets.hpp"
