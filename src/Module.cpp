@@ -155,7 +155,7 @@ struct ProjectMWidget : FramebufferWidget {
   }
 
   bool isAutoplayEnabled() const {
-    return pm->isPresetLocked();
+    return !pm->isPresetLocked();
   }
 
   std::list<std::pair<unsigned int, std::string> > listPresets() {
@@ -202,7 +202,7 @@ struct ToggleAutoplayMenuItem : MenuItem {
   }
 
   void step() override {
-    rightText = (w->isAutoplayEnabled() ? "no" : "yes");
+    rightText = (w->isAutoplayEnabled() ? "yes" : "no");
     MenuItem::step();
   }
 
