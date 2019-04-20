@@ -3,7 +3,25 @@ matrix:
   include:
   - os: linux
     dist: xenial
+    before_script:
+    - pushd src/deps/projectm
+    - git apply ../projectm_fix_shader.diff
+    - "./autogen.sh"
+    - "./configure --with-pic --enable-static --enable-gles"
+    - make
+    - popd
   - os: osx
+    before_script:
+    - pushd src/deps/projectm
+    - git apply ../projectm_fix_shader.diff
+    - "./autogen.sh"
+    - "./configure --with-pic --enable-static --enable-gles"
+    - make
+    - popd
+  - os: windows
+    before_install:
+    - choco install make -y
+    - choco install zip -y
 addons:
   apt:
     packages:
@@ -32,12 +50,6 @@ install:
 - popd
 script:
 - export RACK_DIR="${HOME}"/Rack/Rack-SDK
-- pushd src/deps/projectm
-- git apply ../projectm_fix_shader.diff
-- "./autogen.sh"
-- "./configure --with-pic --enable-static --enable-gles"
-- make
-- popd
 - make dist
 
 deploy:
