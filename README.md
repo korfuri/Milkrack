@@ -13,7 +13,7 @@ into your Rack. Powered by
 * Git clone Milkrack under your `plugins` directory
 * `git submodule init` and `git submodule update`
 * `(cd src/deps/projectm && git apply ../projectm*.diff)`
-* `(cd src/deps/projectm && ./autogen.sh && ./configure --with-pic --enable-static --enable-gles && make)`
+* `(cd src/deps/projectm && ./autogen.sh && ./configure --with-pic --enable-static --enable-gles --disable-threading && make)`
   to build projectM
 * `make` Milkrack itself
 

@@ -15,7 +15,7 @@ matrix:
     - pushd src/deps/projectm
     - git apply ../projectm_fix_shader.diff
     - "./autogen.sh"
-    - "./configure --with-pic --enable-static --enable-gles"
+    - "./configure --with-pic --enable-static --enable-gles --disable-threading"
     - make
     - popd
   - os: windows
