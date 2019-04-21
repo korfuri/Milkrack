@@ -13,6 +13,8 @@
 
 #include <iostream>
 
+static const unsigned int kSampleWindow = 512;
+
 struct MilkrackModule : Module {
   enum ParamIds {
     NEXT_PRESET_PARAM,
@@ -32,18 +34,18 @@ struct MilkrackModule : Module {
   MilkrackModule() : Module(NUM_PARAMS, NUM_INPUTS, NUM_OUTPUTS, NUM_LIGHTS) {}
   void step() override;
 
-  int i = 0;
+  unsigned int i = 0;
   bool full = false;
   bool nextPreset = false;
   SchmittTrigger nextPresetTrig;
-  float pcm_data[512];
+  float pcm_data[kSampleWindow];
 };
 
 
 void MilkrackModule::step() {
   pcm_data[i++] = inputs[LEFT_INPUT].value;
   pcm_data[i++] = inputs[RIGHT_INPUT].value;
-  if (i >= 512) {
+  if (i >= kSampleWindow) {
     i = 0;
     full = true;
   }
@@ -84,7 +86,7 @@ struct ProjectMWidget : FramebufferWidget {
   void step() override {
     dirty = true;
     if (module->full) {
-      pm->pcm()->addPCMfloat_2ch(module->pcm_data, 512);
+      pm->pcm()->addPCMfloat_2ch(module->pcm_data, kSampleWindow);
       module->full = false;
     }
     if (module->nextPreset) {
