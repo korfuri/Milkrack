@@ -34,9 +34,27 @@ Failed to link program: error: linking with uncompiled shader
 
 Try applying the patch under `src/deps` to projectM. Just `cd src/deps/projectm` and `git apply ../projectm*.diff`.
 
+### version '300' is not supported
+
+If you encounter errors such as:
+
+```
+Failed to compile shader 'Vertex: v2f_c4f'. Error: ERROR: 0:1: '' :  version '300' is not supported
+ERROR: 0:1: '' : syntax error: #version
+ERROR: 0:2: 'layout' : syntax error: syntax error
+```
+
+or others like those found in issue #2, this is due to a version
+incompatibility between OpenGL, OSX, projectM and Rack. It's not clear
+whether there's a solution, and we don't have the knowledge or the
+resources to fix it (no access to an OSX dev box). If you have a Mac
+and you know something about OpenGL, please contribute to issue #2.
+
 ### The visualization window is black/shows a scaled down version of my Rack
 
-Your shaders didn't compile. Check the standard output of Rack for errors related to invalid shaders.
+Your shaders didn't compile. Check the standard output of Rack for
+errors related to invalid shaders and refer to the other
+troubleshooting options in this README to find matching errors.
 
 Check that you configured the projectM build with `--enable-gles`.
 
