@@ -78,10 +78,8 @@ struct ProjectMWidget : FramebufferWidget {
   }
 
   ~ProjectMWidget() {
-    //delete projectM; // TODO
+    delete pm;
   }
-
-  int stepi = 0;
 
   void step() override {
     dirty = true;
