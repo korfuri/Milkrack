@@ -52,7 +52,12 @@ and you know something about OpenGL, please contribute to issue #2.
 
 ### The visualization window is black/shows a scaled down version of my Rack
 
-Your shaders didn't compile. Check the standard output of Rack for
+If your window is just black, make sure you're sending sound into the
+module. No signal or non-audio signals may not trigger the preset to
+render anything.
+
+If you are actually sending audio into the module, this is a sign that
+your shaders didn't compile. Check the standard output of Rack for
 errors related to invalid shaders and refer to the other
 troubleshooting options in this README to find matching errors.
 
