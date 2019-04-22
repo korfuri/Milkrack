@@ -7,7 +7,7 @@ matrix:
     - pushd src/deps/projectm
     - git apply ../projectm_fix_shader.diff
     - "./autogen.sh"
-    - "./configure --with-pic --enable-static --enable-gles --disable-threading"
+    - "./configure --with-pic --enable-static --disable-shared --disable-threading"
     - make
     - popd
   - os: osx
@@ -15,7 +15,7 @@ matrix:
     - pushd src/deps/projectm
     - git apply ../projectm_fix_shader.diff
     - "./autogen.sh"
-    - "./configure --with-pic --enable-static --enable-gles --disable-threading"
+    - "./configure --with-pic --enable-static --disable-shared --disable-threading"
     - make
     - popd
   - os: windows
@@ -30,6 +30,7 @@ addons:
     - libglm-dev
     - libgles2-mesa-dev
     - libgl1-mesa-dev
+    - libglu1-mesa-dev
   homebrew:
     packages:
     - glm
