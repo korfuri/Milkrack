@@ -4,6 +4,18 @@ Milkrack brings Winamp's Old Skool Cool visualizations from Milkdrop
 into your Rack. Powered by
 [ProjectM](https://github.com/projectM-visualizer/projectm).
 
+## Usage
+
+Just spawn the module and wire its inputs to your mixer's
+output. Non-audio signals may not give great results, as the
+visualisation presets expect actual sound to detect BPM and perform a
+Fourier transform on.
+
+The button on the left changes the current preset.
+
+The right-click menu allows you to enable automatic preset rotation,
+or to select a specific preset to use.
+
 ## Building
 
 * Install the GLM lib and OpenGL ES development headers, as well as autotools.
