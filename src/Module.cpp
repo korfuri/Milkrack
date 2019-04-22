@@ -217,7 +217,12 @@ struct ProjectMWidget : FramebufferWidget {
     rack::loggerLog(DEBUG_LEVEL, "Milkrack/" __FILE__, __LINE__, "%s context using API %d version %d.%d.%d, profile %d", name.c_str(), api, major, minor, revision);
   }
 
+  static void logGLFWError(int errcode, const char* errmsg) {
+    rack::loggerLog(WARN_LEVEL, "Milkrack/" __FILE__, 0, "GLFW error %d: %s", errcode, errmsg);
+  }
+
   GLFWwindow* createOffscreenContext() {
+    glfwSetErrorCallback(logGLFWError);
     logContextInfo("gWindow", rack::gWindow);
     glfwWindowHint(GLFW_VISIBLE, GLFW_FALSE);
     glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
