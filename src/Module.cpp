@@ -69,8 +69,8 @@ struct ProjectMWidget : FramebufferWidget {
   const bool debug = true;
   const projectM::Settings s;
 
-  // Owned by the UI thread (step(), draw())
   MilkrackModule* module;
+  GLFWwindow* offscreen_context; // not guarded, initialized in the main thread only, used by the render thread only
   std::thread renderThread;
   std::shared_ptr<Font> font;
 
@@ -84,7 +84,9 @@ struct ProjectMWidget : FramebufferWidget {
   int requestPresetID = kPresetIDKeep; // guarded by pm_m; // Indicates to the render thread that it should switch to the specified preset
   std::mutex pm_m;
 
-  ProjectMWidget(std::string presetURL) : s(initSettings(presetURL)), renderThread([this](){ this->renderLoop(); }) {
+  ProjectMWidget(std::string presetURL) : s(initSettings(presetURL)),
+					  offscreen_context(createOffscreenContext()),
+					  renderThread([this](){ this->renderLoop(); }) {
     // Block until renderLoop() finished its initialization
     std::unique_lock<std::mutex> l(pm_m);
     while (status != Status::RENDERING && status != Status::FAILED) {
@@ -215,18 +217,24 @@ struct ProjectMWidget : FramebufferWidget {
     rack::loggerLog(DEBUG_LEVEL, "Milkrack/" __FILE__, __LINE__, "%s context using API %d version %d.%d.%d, profile %d", name.c_str(), api, major, minor, revision);
   }
 
-  // Runs in renderThread. This function is responsible for the whole
-  // lifetime of the rendering GL context and the projectM instance.
-  void renderLoop() {
+  GLFWwindow* createOffscreenContext() {
     logContextInfo("gWindow", rack::gWindow);
     glfwWindowHint(GLFW_VISIBLE, GLFW_FALSE);
     glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
     glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
     glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
     glfwWindowHint(GLFW_MAXIMIZED, GLFW_TRUE);
-    GLFWwindow* offscreen_context = glfwCreateWindow(x, y, "", NULL, rack::gWindow);
-    if (!offscreen_context) {
+    GLFWwindow* c = glfwCreateWindow(x, y, "", NULL, rack::gWindow);
+    if (!c) {
       rack::loggerLog(DEBUG_LEVEL, "Milkrack/" __FILE__, __LINE__, "Milkrack renderLoop could not create a context, bailing.");
+    }
+    return c;
+  }
+
+  // Runs in renderThread. This function is responsible for the whole
+  // lifetime of the rendering GL context and the projectM instance.
+  void renderLoop() {
+    if (!offscreen_context) {
       std::lock_guard<std::mutex> l(pm_m);
       status = Status::FAILED;
       pm = nullptr;
