@@ -25,10 +25,11 @@ ifdef ARCH_WIN
 endif
 
 ifdef ARCH_WIN
-	OBJECTS += libs/win/libprojectM/libprojectM.a
+	LIBPROJECTM = libs/win/libprojectM/libprojectM.a
 else
-	OBJECTS += src/deps/projectm/src/libprojectM/.libs/libprojectM.a
+	LIBPROJECTM = src/deps/projectm/src/libprojectM/.libs/libprojectM.a
 endif
+OBJECTS += $(LIBPROJECTM)
 
 # Add .cpp and .c files to the build
 SOURCES += $(wildcard src/*.cpp)
@@ -39,3 +40,15 @@ DISTRIBUTABLES += $(wildcard LICENSE*) res src/deps/projectm/presets
 
 # Include the VCV Rack plugin Makefile framework
 include $(RACK_DIR)/plugin.mk
+
+dep: $(LIBPROJECTM)
+
+src/deps/projectm/src/libprojectM/.libs/libprojectM.a:
+	(cd src/deps/projectm; git apply ../projectm_fix_shader.diff || true)
+	(cd src/deps/projectm; ./autogen.sh)
+	(cd src/deps/projectm; ./configure --with-pic --enable-static --enable-gles --disable-threading)
+	(cd src/deps/projectm; make)
+
+depclean:
+	(cd src/deps/projectm; make clean)
+	(cd src/deps/projectm; git checkout -- .)
