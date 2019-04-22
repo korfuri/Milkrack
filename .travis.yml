@@ -14,7 +14,6 @@ addons:
     - autoconf
     - libtool
     - libglm-dev
-    - libgles2-mesa-dev
     - libgl1-mesa-dev
   homebrew:
     packages:
