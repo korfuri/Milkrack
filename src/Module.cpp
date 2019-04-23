@@ -6,6 +6,7 @@
 #include "nanovg_gl.h"
 #include "deps/projectm/src/libprojectM/projectM.hpp"
 #include "deps/projectm/src/libprojectM/wipemalloc.h"
+#include "glfwUtils.hpp"
 
 #include <thread>
 
@@ -70,28 +71,27 @@ struct ProjectMWidget : FramebufferWidget {
   const projectM::Settings s;
 
   MilkrackModule* module;
-  GLFWwindow* offscreen_context; // not guarded, initialized in the main thread only, used by the render thread only
-  std::thread renderThread;
+
+  // Owned by the render thread
+  GLFWwindow* window;
+  projectM* pm = nullptr;
+  bool dirtySize = false;
+
+  // Owned by the main thread
   std::shared_ptr<Font> font;
+  std::thread renderThread;
 
   // Shared between threads
-  projectM* pm; // guarded by pm_m;
-  unsigned int texture; // guarded by pm_m;
   Status status = Status::NOT_INITIALIZED; // guarded by pm_m
-  std::condition_variable pm_cv; // guarded by pm_m;
   static const int kPresetIDRandom = -1; // Switch to a random preset
   static const int kPresetIDKeep = -2; // Keep the current preset
-  int requestPresetID = kPresetIDKeep; // guarded by pm_m; // Indicates to the render thread that it should switch to the specified preset
+  int requestPresetID = kPresetIDKeep; // guarded by pm_m // Indicates to the render thread that it should switch to the specified preset
+  bool requestToggleAutoplay = false; // guarded by pm_m
   std::mutex pm_m;
 
   ProjectMWidget(std::string presetURL) : s(initSettings(presetURL)),
-					  offscreen_context(createOffscreenContext()),
+					  window(createWindow()),
 					  renderThread([this](){ this->renderLoop(); }) {
-    // Block until renderLoop() finished its initialization
-    std::unique_lock<std::mutex> l(pm_m);
-    while (status != Status::RENDERING && status != Status::FAILED) {
-      pm_cv.wait(l);
-    }
   }
 
   static ProjectMWidget* create(Vec pos, std::string presetURL) {
@@ -102,18 +102,23 @@ struct ProjectMWidget : FramebufferWidget {
 
   ~ProjectMWidget() {
     {
+      // Request that the render thread terminates the renderLoop
       std::lock_guard <std::mutex> l(pm_m);
       if (status != Status::FAILED) {
 	status = Status::PLEASE_EXIT;
       }
     }
+    // Wait for renderLoop to terminate before releasing resources
     renderThread.join();
   }
 
   void step() override {
+    {
+      std::lock_guard<std::mutex> l(pm_m);
+      if (status != Status::RENDERING) return;
+    }
     dirty = true;
     if (module->full) {
-      std::lock_guard<std::mutex> l(pm_m);
       if (!pm) return;
       pm->pcm()->addPCMfloat_2ch(module->pcm_data, kSampleWindow);
       module->full = false;
@@ -128,16 +133,14 @@ struct ProjectMWidget : FramebufferWidget {
     }
   }
 
-  unsigned int activePreset() {
-    std::lock_guard<std::mutex> l(pm_m);
+  unsigned int activePreset() const {
     unsigned int presetIdx;
     if (!pm) return 0;
     pm->selectedPresetIndex(presetIdx);
     return presetIdx;
   }
 
-  std::string activePresetName() {
-    std::lock_guard<std::mutex> l(pm_m);
+  std::string activePresetName() const {
     unsigned int presetIdx;
     if (!pm) return "";
     if (pm->selectedPresetIndex(presetIdx)) {
@@ -147,19 +150,6 @@ struct ProjectMWidget : FramebufferWidget {
   }
 
   void draw(NVGcontext* vg) override {
-    {
-      std::lock_guard<std::mutex> l(pm_m);
-      if (status == Status::RENDERING) {
-	nvgBeginPath(vg);
-	nvgRect(vg, 0, 0, x, y);
-	int img = nvglCreateImageFromHandleGL2(vg, texture, x, y, 0); // TODO can we memoize this?
-	NVGpaint imgPaint = nvgImagePattern(vg, 0, 0, x, y, 0.0f, img, 1.0f); // TODO can we memoize that?
-	nvgFillPaint(vg, imgPaint);
-	nvgFill(vg);
-	nvgClosePath(vg);
-      }
-    }
-
     nvgSave(vg);
     nvgScissor(vg, 0, 0, x, y);
     nvgBeginPath(vg);
@@ -176,14 +166,17 @@ struct ProjectMWidget : FramebufferWidget {
     nvgRestore(vg);
   }
 
-  void setAutoplay(bool enable) {
+  void toggleAutoplay() {
     std::lock_guard<std::mutex> l(pm_m);
+    requestToggleAutoplay = true;
+  }
+
+  void renderSetAutoplay(bool enable) {
     if (!pm) return;
     pm->setPresetLock(!enable);
   }
 
-  bool isAutoplayEnabled() {
-    std::lock_guard<std::mutex> l(pm_m);
+  bool isAutoplayEnabled() const {
     if (!pm) return false;
     return !pm->isPresetLocked();
   }
@@ -209,7 +202,7 @@ struct ProjectMWidget : FramebufferWidget {
     requestPresetID = kPresetIDRandom;
   }
 
-    void logContextInfo(std::string name, GLFWwindow* w) const {
+  void logContextInfo(std::string name, GLFWwindow* w) const {
     int major = glfwGetWindowAttrib(w, GLFW_CONTEXT_VERSION_MAJOR);
     int minor = glfwGetWindowAttrib(w, GLFW_CONTEXT_VERSION_MINOR);
     int revision = glfwGetWindowAttrib(w, GLFW_CONTEXT_REVISION);
@@ -221,69 +214,139 @@ struct ProjectMWidget : FramebufferWidget {
     rack::loggerLog(WARN_LEVEL, "Milkrack/" __FILE__, 0, "GLFW error %d: %s", errcode, errmsg);
   }
 
-  GLFWwindow* createOffscreenContext() {
+  GLFWwindow* createWindow() {
     glfwSetErrorCallback(logGLFWError);
     logContextInfo("gWindow", rack::gWindow);
-    glfwWindowHint(GLFW_VISIBLE, GLFW_FALSE);
+    glfwWindowHint(GLFW_VISIBLE, GLFW_TRUE);
     glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
     glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
     glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
     glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GL_TRUE);
-    GLFWwindow* c = glfwCreateWindow(x, y, "", NULL, rack::gWindow);
+    glfwWindowHint(GLFW_MAXIMIZED, GLFW_FALSE);
+    GLFWwindow* c = glfwCreateWindow(x, y, "", NULL, NULL);
+
     if (!c) {
       rack::loggerLog(DEBUG_LEVEL, "Milkrack/" __FILE__, __LINE__, "Milkrack renderLoop could not create a context, bailing.");
     }
+
+    glfwSetWindowUserPointer(c, reinterpret_cast<void*>(this));
+    glfwSetFramebufferSizeCallback(c, framebufferSizeCallback);
+    glfwSetWindowCloseCallback(c, [](GLFWwindow* w) { glfwIconifyWindow(w); });
+    glfwSetKeyCallback(c, keyCallback);
+    glfwSetWindowTitle(c, u8"Milkrack");
     return c;
+  }
+
+  static void framebufferSizeCallback(GLFWwindow* win, int x, int y) {
+    ProjectMWidget* widget = reinterpret_cast<ProjectMWidget*>(glfwGetWindowUserPointer(win));
+    widget->dirtySize = true;
+  }
+
+  int last_xpos, last_ypos, last_width, last_height;
+  static void keyCallback(GLFWwindow* win, int key, int scancode, int action, int mods) {
+    ProjectMWidget* widget = reinterpret_cast<ProjectMWidget*>(glfwGetWindowUserPointer(win));
+    if (action != GLFW_PRESS) return;
+    switch (key) {
+    case GLFW_KEY_F:
+    case GLFW_KEY_F4:
+    case GLFW_KEY_ENTER:
+      {
+	const GLFWmonitor* current_monitor = glfwGetWindowMonitor(win);
+	if (!current_monitor) {
+	  GLFWmonitor* best_monitor = glfwWindowGetNearestMonitor(win);
+	  const GLFWvidmode* mode = glfwGetVideoMode(best_monitor);
+	  glfwGetWindowPos(win, &widget->last_xpos, &widget->last_ypos);
+	  glfwGetWindowSize(win, &widget->last_width, &widget->last_height);
+	  glfwSetWindowMonitor(win, best_monitor, 0, 0, mode->width, mode->height, mode->refreshRate);
+	} else {
+	  glfwSetWindowMonitor(win, nullptr, widget->last_xpos, widget->last_ypos, widget->last_width, widget->last_height, GLFW_DONT_CARE);
+	}
+
+      }
+      break;
+    case GLFW_KEY_ESCAPE:
+    case GLFW_KEY_Q:
+      {
+	const GLFWmonitor* monitor = glfwGetWindowMonitor(win);
+	if (!monitor) {
+	  glfwIconifyWindow(win);
+	} else {
+	  glfwSetWindowMonitor(win, nullptr, widget->last_xpos, widget->last_ypos, widget->last_width, widget->last_height, GLFW_DONT_CARE);
+	}
+      }
+      break;
+    case GLFW_KEY_R:
+      widget->requestPresetID = kPresetIDRandom;
+      break;
+    default:
+      break;
+    }
   }
 
   // Runs in renderThread. This function is responsible for the whole
   // lifetime of the rendering GL context and the projectM instance.
   void renderLoop() {
-    if (!offscreen_context) {
+    if (!window) {
       std::lock_guard<std::mutex> l(pm_m);
       status = Status::FAILED;
-      pm = nullptr;
-      pm_cv.notify_all(); // Tell the main thread it can continue
       return;
     }
-    glfwMakeContextCurrent(offscreen_context);
-    logContextInfo("offscreen_context", offscreen_context);
+    glfwMakeContextCurrent(window);
+    logContextInfo("Milkrack window", window);
 
-    // Initialize projectM rendering to texture
-    {
-      std::lock_guard<std::mutex> l(pm_m);
-      pm = new projectM(s);
-      texture = pm->initRenderToTexture();
-      status = Status::RENDERING;
-      pm_cv.notify_all(); // Tell the main thread it can continue
-    }
+    // Initialize projectM
+    pm = new projectM(s);
 
-    setAutoplay(false);
+    status = Status::RENDERING;
+
+    renderSetAutoplay(false);
     renderLoopNextPreset();
 
     while (true) {
       {
-	std::lock_guard<std::mutex> l(pm_m);
-	// Did the main thread request that we exit?
-	if (status == Status::PLEASE_EXIT) {
-	  break;
-	}
-	// Did the main thread request that we change the preset?
-	if (requestPresetID != kPresetIDKeep) {
-	  if (requestPresetID == kPresetIDRandom) {
-	    renderLoopNextPreset();
-	  } else {
-	    renderLoopSetPreset(requestPresetID);
+	{
+	  std::lock_guard<std::mutex> l(pm_m);
+	  // Did the main thread request that we exit?
+	  if (status == Status::PLEASE_EXIT) {
+	    break;
 	  }
-	  requestPresetID = kPresetIDKeep;
 	}
+
+	// Resize?
+	if (dirtySize) {
+	  int x, y;
+	  glfwGetFramebufferSize(window, &x, &y);
+	  pm->projectM_resetGL(x, y);
+	  dirtySize = false;
+	}
+
+	{
+	  std::lock_guard<std::mutex> l(pm_m);
+	  // Did the main thread request an autoplay toggle?
+	  if (requestToggleAutoplay) {
+	    renderSetAutoplay(!isAutoplayEnabled());
+	    requestToggleAutoplay = false;
+	  }
+
+	  // Did the main thread request that we change the preset?
+	  if (requestPresetID != kPresetIDKeep) {
+	    if (requestPresetID == kPresetIDRandom) {
+	      renderLoopNextPreset();
+	    } else {
+	      renderLoopSetPreset(requestPresetID);
+	    }
+	    requestPresetID = kPresetIDKeep;
+	  }
+	}
+
 	pm->renderFrame();
+	glfwSwapBuffers(window);
       }
       usleep(1000000/fps);
     }
 
     delete pm;
-    glfwDestroyWindow(offscreen_context);
+    glfwDestroyWindow(window);
     status = Status::EXITING;
   }
 
@@ -299,7 +362,7 @@ struct ProjectMWidget : FramebufferWidget {
     return s;
   }
 
-    // Switch to the next preset. This should be called only from the
+  // Switch to the next preset. This should be called only from the
   // render thread. pm_m must be held when calling this.
   void renderLoopNextPreset() {
     unsigned int n = pm->getPlaylistSize();
@@ -345,7 +408,7 @@ struct ToggleAutoplayMenuItem : MenuItem {
   ProjectMWidget* w;
 
   void onAction(EventAction& e) override {
-    w->setAutoplay(!w->isAutoplayEnabled());
+    w->toggleAutoplay();
   }
 
   void step() override {
@@ -366,7 +429,7 @@ struct MilkrackModuleWidget : ModuleWidget {
   ProjectMWidget* w;
 
   MilkrackModuleWidget(MilkrackModule *module) : ModuleWidget(module) {
-    setPanel(SVG::load(assetPlugin(plugin, "res/MilkrackModule.svg")));
+    setPanel(SVG::load(assetPlugin(plugin, "res/MilkrackSeparateWindow.svg")));
 
     addInput(Port::create<PJ301MPort>(Vec(15, 60), Port::INPUT, module, MilkrackModule::LEFT_INPUT));
     addInput(Port::create<PJ301MPort>(Vec(15, 90), Port::INPUT, module, MilkrackModule::RIGHT_INPUT));
@@ -374,7 +437,7 @@ struct MilkrackModuleWidget : ModuleWidget {
     addParam(ParamWidget::create<TL1105>(Vec(19, 150), module, MilkrackModule::NEXT_PRESET_PARAM, 0.0, 1.0, 0.0));
 
     std::shared_ptr<Font> font = Font::load(assetPlugin(plugin, "res/fonts/LiberationSans/LiberationSans-Regular.ttf"));
-    w = ProjectMWidget::create(Vec(50, 10), assetPlugin(plugin, "presets/presets_projectM/"));
+    w = ProjectMWidget::create(Vec(15, 120), assetPlugin(plugin, "presets/presets_projectM/"));
     w->module = module;
     w->font = font;
     addChild(w);
