@@ -5,8 +5,7 @@
 #include "dsp/digital.hpp"
 #include "nanovg_gl.h"
 #include "deps/projectm/src/libprojectM/projectM.hpp"
-#include "deps/projectm/src/libprojectM/wipemalloc.h"
-#include "glfwUtils.hpp"
+#include "Renderer.hpp"
 
 #include <thread>
 
@@ -53,78 +52,36 @@ struct MilkrackModule : Module {
 };
 
 
-struct ProjectMWidget : FramebufferWidget {
-  enum Status {
-    NOT_INITIALIZED,
-    SETTINGS_SET,
-    RENDERING,
-    FAILED,
-    PLEASE_EXIT,
-    EXITING
-  };
-
+struct BaseProjectMWidget : FramebufferWidget {
   const int fps = 60;
   const bool debug = true;
   const projectM::Settings s;
 
   MilkrackModule* module;
 
-  // Owned by the render thread
-  GLFWwindow* window;
-  projectM* pm = nullptr; // also accessed by the UI thread to list preset info
-  bool dirtySize = false;
-
-  // Owned by the main thread
   std::shared_ptr<Font> font;
-  std::thread renderThread;
 
-  // Shared between threads
-  Status status = Status::NOT_INITIALIZED;
-  static const int kPresetIDRandom = -1; // Switch to a random preset
-  static const int kPresetIDKeep = -2; // Keep the current preset
-  int requestPresetID = kPresetIDKeep; // Indicates to the render thread that it should switch to the specified preset
-  bool requestToggleAutoplay = false;
+  BaseProjectMWidget() {}
+  virtual ~BaseProjectMWidget() {}
 
-  // Mutexes
-  mutable std::mutex pm_m;
-  mutable std::mutex flags_m;
-
-  ProjectMWidget(std::string presetURL) : s(initSettings(presetURL)),
-					  window(createWindow()),
-					  renderThread([this](){ this->renderLoop(); }) {
+  void init(std::string presetURL) {
+    getRenderer()->init(initSettings(presetURL));
   }
 
-  static ProjectMWidget* create(Vec pos, std::string presetURL) {
-    ProjectMWidget* p = new ProjectMWidget(presetURL);
+  template<typename T>
+  static BaseProjectMWidget* create(Vec pos, std::string presetURL) {
+    BaseProjectMWidget* p = new T;
     p->box.pos = pos;
+    p->init(presetURL);
     return p;
   }
 
-  ~ProjectMWidget() {
-    {
-      // Request that the render thread terminates the renderLoop
-      std::lock_guard <std::mutex> l(flags_m);
-      if (status != Status::FAILED) {
-	status = Status::PLEASE_EXIT;
-      }
-    }
-    // Wait for renderLoop to terminate before releasing resources
-    renderThread.join();
-    // Destroy the window in the main thread, because it's not legal
-    // to do so in other threads.
-    glfwDestroyWindow(window);
-  }
+  virtual ProjectMRenderer* getRenderer() = 0;
 
   void step() override {
-    {
-      std::lock_guard<std::mutex> l(flags_m);
-      if (status != Status::RENDERING) return;
-    }
     dirty = true;
     if (module->full) {
-      std::lock_guard<std::mutex> l(pm_m);
-      if (!pm) return;
-      pm->pcm()->addPCMfloat_2ch(module->pcm_data, kSampleWindow);
+      getRenderer()->addPCMData(module->pcm_data, kSampleWindow);
       module->full = false;
     }
     // If the module requests that we change the preset at random
@@ -132,247 +89,14 @@ struct ProjectMWidget : FramebufferWidget {
     // do so on the next pass.
     if (module->nextPreset) {
       module->nextPreset = false;
-      std::lock_guard<std::mutex> l(flags_m);
-      requestPresetID = kPresetIDRandom;
+      getRenderer()->requestPresetID(kPresetIDRandom);
     }
-  }
-
-  unsigned int activePreset() const {
-    unsigned int presetIdx;
-    std::lock_guard<std::mutex> l(pm_m);
-    if (!pm) return 0;
-    pm->selectedPresetIndex(presetIdx);
-    return presetIdx;
-  }
-
-  std::string activePresetName() const {
-    unsigned int presetIdx;
-    std::unique_lock<std::mutex> l(pm_m);
-    if (!pm) return "";
-    if (pm->selectedPresetIndex(presetIdx)) {
-      l.unlock();
-      return pm->getPresetName(presetIdx);
-    }
-    return "";
-  }
-
-  void setRequestPresetID(int id) {
-    std::lock_guard<std::mutex> l(flags_m);
-    requestPresetID = id;
-  }
-
-  int getRequestPresetID() const {
-    std::lock_guard<std::mutex> l(flags_m);
-    return requestPresetID;
-  }
-
-  void draw(NVGcontext* vg) override {
-    nvgSave(vg);
-    nvgScissor(vg, 0, 0, 15, 200);
-    nvgBeginPath(vg);
-    nvgFillColor(vg, nvgRGB(0x06, 0xbd, 0x01));
-    nvgFontSize(vg, 14);
-    nvgFontFaceId(vg, font->handle);
-    nvgTextAlign(vg, NVG_ALIGN_BOTTOM);
-    nvgText(vg, 10, 20, activePresetName().c_str(), nullptr);
-    if (status == Status::FAILED) {
-      nvgText(vg, 10, 100, "Unable to initialize rendering. See log for details.", nullptr);
-    }
-    nvgFill(vg);
-    nvgClosePath(vg);
-    nvgRestore(vg);
-  }
-
-  void toggleAutoplay() {
-    std::lock_guard<std::mutex> l(flags_m);
-    requestToggleAutoplay = true;
-  }
-
-  // Assumes pm_m is held
-  void renderSetAutoplay(bool enable) {
-    if (!pm) return;
-    pm->setPresetLock(!enable);
-  }
-
-  bool isAutoplayEnabled() const {
-    std::lock_guard<std::mutex> l(pm_m);
-    if (!pm) return false;
-    return !pm->isPresetLocked();
-  }
-
-  std::list<std::pair<unsigned int, std::string> > listPresets() const {
-    std::list<std::pair<unsigned int, std::string> > presets;
-    unsigned int n;
-    {
-      std::lock_guard<std::mutex> l(pm_m);
-      if (!pm) return presets;
-      n = pm->getPlaylistSize();
-    }
-    if (!n) {
-      return presets;
-    }
-    for (unsigned int i = 0; i < n; ++i){
-      presets.push_back(std::make_pair(i, std::string(pm->getPresetName(i))));
-    }
-    return presets;
   }
 
   void randomize() {
     // Tell the render thread to switch to another preset on the next
     // pass.
-    std::lock_guard<std::mutex> l(flags_m);
-    requestPresetID = kPresetIDRandom;
-  }
-
-  void logContextInfo(std::string name, GLFWwindow* w) const {
-    int major = glfwGetWindowAttrib(w, GLFW_CONTEXT_VERSION_MAJOR);
-    int minor = glfwGetWindowAttrib(w, GLFW_CONTEXT_VERSION_MINOR);
-    int revision = glfwGetWindowAttrib(w, GLFW_CONTEXT_REVISION);
-    int api = glfwGetWindowAttrib(w, GLFW_CLIENT_API);
-    rack::loggerLog(DEBUG_LEVEL, "Milkrack/" __FILE__, __LINE__, "%s context using API %d version %d.%d.%d, profile %d", name.c_str(), api, major, minor, revision);
-  }
-
-  static void logGLFWError(int errcode, const char* errmsg) {
-    rack::loggerLog(WARN_LEVEL, "Milkrack/" __FILE__, 0, "GLFW error %d: %s", errcode, errmsg);
-  }
-
-  GLFWwindow* createWindow() {
-    glfwSetErrorCallback(logGLFWError);
-    logContextInfo("gWindow", rack::gWindow);
-    glfwWindowHint(GLFW_VISIBLE, GLFW_TRUE);
-    glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
-    glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
-    glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
-    glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GL_TRUE);
-    glfwWindowHint(GLFW_MAXIMIZED, GLFW_FALSE);
-    GLFWwindow* c = glfwCreateWindow(320, 240, "", NULL, NULL);
-
-    if (!c) {
-      rack::loggerLog(DEBUG_LEVEL, "Milkrack/" __FILE__, __LINE__, "Milkrack renderLoop could not create a context, bailing.");
-    }
-
-    glfwSetWindowUserPointer(c, reinterpret_cast<void*>(this));
-    glfwSetFramebufferSizeCallback(c, framebufferSizeCallback);
-    glfwSetWindowCloseCallback(c, [](GLFWwindow* w) { glfwIconifyWindow(w); });
-    glfwSetKeyCallback(c, keyCallback);
-    glfwSetWindowTitle(c, u8"Milkrack");
-    return c;
-  }
-
-  static void framebufferSizeCallback(GLFWwindow* win, int x, int y) {
-    ProjectMWidget* widget = reinterpret_cast<ProjectMWidget*>(glfwGetWindowUserPointer(win));
-    widget->dirtySize = true;
-  }
-
-  int last_xpos, last_ypos, last_width, last_height;
-  static void keyCallback(GLFWwindow* win, int key, int scancode, int action, int mods) {
-    ProjectMWidget* widget = reinterpret_cast<ProjectMWidget*>(glfwGetWindowUserPointer(win));
-    if (action != GLFW_PRESS) return;
-    switch (key) {
-    case GLFW_KEY_F:
-    case GLFW_KEY_F4:
-    case GLFW_KEY_ENTER:
-      {
-	const GLFWmonitor* current_monitor = glfwGetWindowMonitor(win);
-	if (!current_monitor) {
-	  GLFWmonitor* best_monitor = glfwWindowGetNearestMonitor(win);
-	  const GLFWvidmode* mode = glfwGetVideoMode(best_monitor);
-	  glfwGetWindowPos(win, &widget->last_xpos, &widget->last_ypos);
-	  glfwGetWindowSize(win, &widget->last_width, &widget->last_height);
-	  glfwSetWindowMonitor(win, best_monitor, 0, 0, mode->width, mode->height, mode->refreshRate);
-	} else {
-	  glfwSetWindowMonitor(win, nullptr, widget->last_xpos, widget->last_ypos, widget->last_width, widget->last_height, GLFW_DONT_CARE);
-	}
-
-      }
-      break;
-    case GLFW_KEY_ESCAPE:
-    case GLFW_KEY_Q:
-      {
-	const GLFWmonitor* monitor = glfwGetWindowMonitor(win);
-	if (!monitor) {
-	  glfwIconifyWindow(win);
-	} else {
-	  glfwSetWindowMonitor(win, nullptr, widget->last_xpos, widget->last_ypos, widget->last_width, widget->last_height, GLFW_DONT_CARE);
-	}
-      }
-      break;
-    case GLFW_KEY_R:
-      widget->requestPresetID = kPresetIDRandom;
-      break;
-    default:
-      break;
-    }
-  }
-
-  // Runs in renderThread. This function is responsible for the whole
-  // lifetime of the rendering GL context and the projectM instance.
-  void renderLoop() {
-    status = Status::FAILED;
-    if (!window) {
-      std::lock_guard<std::mutex> l(flags_m);
-      status = Status::FAILED;
-      return;
-    }
-    glfwMakeContextCurrent(window);
-    logContextInfo("Milkrack window", window);
-
-    // Initialize projectM
-    pm = new projectM(s);
-
-    status = Status::RENDERING;
-
-    renderSetAutoplay(false);
-    renderLoopNextPreset();
-
-    while (true) {
-      {
-	{
-	  std::lock_guard<std::mutex> l(flags_m);
-	  // Did the main thread request that we exit?
-	  if (status == Status::PLEASE_EXIT) {
-	    break;
-	  }
-	}
-
-	// Resize?
-	if (dirtySize) {
-	  int x, y;
-	  glfwGetFramebufferSize(window, &x, &y);
-	  pm->projectM_resetGL(x, y);
-	  dirtySize = false;
-	}
-
-	{
-	  std::lock_guard<std::mutex> l(flags_m);
-	  // Did the main thread request an autoplay toggle?
-	  if (requestToggleAutoplay) {
-	    renderSetAutoplay(!isAutoplayEnabled());
-	    requestToggleAutoplay = false;
-	  }
-
-	  // Did the main thread request that we change the preset?
-	  if (requestPresetID != kPresetIDKeep) {
-	    if (requestPresetID == kPresetIDRandom) {
-	      renderLoopNextPreset();
-	    } else {
-	      renderLoopSetPreset(requestPresetID);
-	    }
-	    requestPresetID = kPresetIDKeep;
-	  }
-	}
-
-	{
-	  std::lock_guard<std::mutex> l(pm_m);
-	  pm->renderFrame();
-	}
-	glfwSwapBuffers(window);
-      }
-      usleep(1000000/fps);
-    }
-
-    delete pm;
-    status = Status::EXITING;
+    getRenderer()->requestPresetID(kPresetIDRandom);
   }
 
   // Builds a Settings object to initialize the member one in the
@@ -382,45 +106,90 @@ struct ProjectMWidget : FramebufferWidget {
   projectM::Settings initSettings(std::string presetURL) const {
     projectM::Settings s;
     s.presetURL = presetURL;
-    s.windowWidth = 320;
-    s.windowHeight = 240;
+    s.windowWidth = 360;
+    s.windowHeight = 360;
     return s;
   }
+};
 
-  // Switch to the next preset. This should be called only from the
-  // render thread.
-  void renderLoopNextPreset() {
-    unsigned int n = pm->getPlaylistSize();
-    if (n) {
-      pm->selectPreset(rand() % n);
+struct WindowedProjectMWidget : BaseProjectMWidget {
+  WindowedRenderer* renderer;
+
+  WindowedProjectMWidget() : renderer(new WindowedRenderer) {}
+
+  ~WindowedProjectMWidget() { delete renderer; }
+
+  ProjectMRenderer* getRenderer() override { return renderer; }
+
+  void draw(NVGcontext* vg) override {
+    nvgSave(vg);
+    nvgScissor(vg, 0, 0, 15, 200);
+    nvgBeginPath(vg);
+    nvgFillColor(vg, nvgRGB(0x06, 0xbd, 0x01));
+    nvgFontSize(vg, 14);
+    nvgFontFaceId(vg, font->handle);
+    nvgTextAlign(vg, NVG_ALIGN_BOTTOM);
+    nvgText(vg, 10, 20, getRenderer()->activePresetName().c_str(), nullptr);
+    if (!getRenderer()->isRendering()) {
+      nvgText(vg, 10, 100, "Unable to initialize rendering. See log for details.", nullptr);
     }
+    nvgFill(vg);
+    nvgClosePath(vg);
+    nvgRestore(vg);
   }
+};
 
-  // Switch to the indicated preset. This should be called only from
-  // the render thread.
-  void renderLoopSetPreset(unsigned int i) {
-    unsigned int n = pm->getPlaylistSize();
-    if (n && i < n) {
-      pm->selectPreset(i);
-    }
+struct EmbeddedProjectMWidget : BaseProjectMWidget {
+  static const int x = 360;
+  static const int y = 360;
+
+  TextureRenderer* renderer;
+
+  EmbeddedProjectMWidget() : renderer(new TextureRenderer) {}
+
+  ~EmbeddedProjectMWidget() { delete renderer; }
+
+  ProjectMRenderer* getRenderer() override { return renderer; }
+
+  void draw(NVGcontext* vg) override {
+    int img = nvglCreateImageFromHandleGL2(vg, renderer->getTextureID(), x, y, 0);
+    NVGpaint imgPaint = nvgImagePattern(vg, 0, 0, x, y, 0.0f, img, 1.0f);
+
+    nvgBeginPath(vg);
+    nvgRect(vg, 0, 0, x, y);
+    nvgFillPaint(vg, imgPaint);
+    nvgFill(vg);
+    nvgClosePath(vg);
+
+    nvgSave(vg);
+    nvgScissor(vg, 0, 0, x, y);
+    nvgBeginPath(vg);
+    nvgFillColor(vg, nvgRGB(0x06, 0xbd, 0x01));
+    nvgFontSize(vg, 14);
+    nvgFontFaceId(vg, font->handle);
+    nvgTextAlign(vg, NVG_ALIGN_BOTTOM);
+    nvgText(vg, 10, 20, getRenderer()->activePresetName().c_str(), nullptr);
+    nvgFill(vg);
+    nvgClosePath(vg);
+    nvgRestore(vg);
   }
 };
 
 
 struct SetPresetMenuItem : MenuItem {
-  ProjectMWidget* w;
+  BaseProjectMWidget* w;
   unsigned int presetId;
 
   void onAction(EventAction& e) override {
-    w->setRequestPresetID(presetId);
+    w->getRenderer()->requestPresetID(presetId);
   }
 
   void step() override {
-    rightText = (w->activePreset() == presetId) ? "<<" : "";
+    rightText = (w->getRenderer()->activePreset() == presetId) ? "<<" : "";
     MenuItem::step();
   }
 
-  static SetPresetMenuItem* construct(std::string label, unsigned int i, ProjectMWidget* w) {
+  static SetPresetMenuItem* construct(std::string label, unsigned int i, BaseProjectMWidget* w) {
     SetPresetMenuItem* m = new SetPresetMenuItem;
     m->w = w;
     m->presetId = i;
@@ -430,18 +199,18 @@ struct SetPresetMenuItem : MenuItem {
 };
 
 struct ToggleAutoplayMenuItem : MenuItem {
-  ProjectMWidget* w;
+  BaseProjectMWidget* w;
 
   void onAction(EventAction& e) override {
-    w->toggleAutoplay();
+    w->getRenderer()->requestToggleAutoplay();
   }
 
   void step() override {
-    rightText = (w->isAutoplayEnabled() ? "yes" : "no");
+    rightText = (w->getRenderer()->isAutoplayEnabled() ? "yes" : "no");
     MenuItem::step();
   }
 
-  static ToggleAutoplayMenuItem* construct(std::string label, ProjectMWidget* w) {
+  static ToggleAutoplayMenuItem* construct(std::string label, BaseProjectMWidget* w) {
     ToggleAutoplayMenuItem* m = new ToggleAutoplayMenuItem;
     m->w = w;
     m->text = label;
@@ -450,23 +219,10 @@ struct ToggleAutoplayMenuItem : MenuItem {
 };
 
 
-struct MilkrackModuleWidget : ModuleWidget {
-  ProjectMWidget* w;
+struct BaseMilkrackModuleWidget : ModuleWidget {
+  BaseProjectMWidget* w;
 
-  MilkrackModuleWidget(MilkrackModule *module) : ModuleWidget(module) {
-    setPanel(SVG::load(assetPlugin(plugin, "res/MilkrackSeparateWindow.svg")));
-
-    addInput(Port::create<PJ301MPort>(Vec(15, 60), Port::INPUT, module, MilkrackModule::LEFT_INPUT));
-    addInput(Port::create<PJ301MPort>(Vec(15, 90), Port::INPUT, module, MilkrackModule::RIGHT_INPUT));
-
-    addParam(ParamWidget::create<TL1105>(Vec(19, 150), module, MilkrackModule::NEXT_PRESET_PARAM, 0.0, 1.0, 0.0));
-
-    std::shared_ptr<Font> font = Font::load(assetPlugin(plugin, "res/fonts/LiberationSans/LiberationSans-Regular.ttf"));
-    w = ProjectMWidget::create(Vec(15, 120), assetPlugin(plugin, "presets/presets_projectM/"));
-    w->module = module;
-    w->font = font;
-    addChild(w);
-  }
+  using ModuleWidget::ModuleWidget;
 
   void randomize() override {
     w->randomize();
@@ -482,16 +238,47 @@ struct MilkrackModuleWidget : ModuleWidget {
 
     menu->addChild(construct<MenuLabel>());
     menu->addChild(construct<MenuLabel>(&MenuLabel::text, "Preset"));
-    auto presets = w->listPresets();
+    auto presets = w->getRenderer()->listPresets();
     for (auto p : presets) {
       menu->addChild(SetPresetMenuItem::construct(p.second, p.first, w));
     }
   }
 };
 
+struct MilkrackModuleWidget : BaseMilkrackModuleWidget {
+  MilkrackModuleWidget(MilkrackModule* module) : BaseMilkrackModuleWidget(module) {
+    setPanel(SVG::load(assetPlugin(plugin, "res/MilkrackSeparateWindow.svg")));
 
-// Specify the Module and ModuleWidget subclass, human-readable
-// author name for categorization per plugin, module slug (should never
-// change), human-readable module name, and any number of tags
-// (found in `include/tags.hpp`) separated by commas.
-Model *modelMilkrackModule = Model::create<MilkrackModule, MilkrackModuleWidget>("Milkrack", "Milkrack", "Milkrack - Old Skool Winamp visuals in yo rack", VISUAL_TAG);
+    addInput(Port::create<PJ301MPort>(Vec(15, 60), Port::INPUT, module, MilkrackModule::LEFT_INPUT));
+    addInput(Port::create<PJ301MPort>(Vec(15, 90), Port::INPUT, module, MilkrackModule::RIGHT_INPUT));
+
+    addParam(ParamWidget::create<TL1105>(Vec(19, 150), module, MilkrackModule::NEXT_PRESET_PARAM, 0.0, 1.0, 0.0));
+
+    std::shared_ptr<Font> font = Font::load(assetPlugin(plugin, "res/fonts/LiberationSans/LiberationSans-Regular.ttf"));
+    w = BaseProjectMWidget::create<WindowedProjectMWidget>(Vec(15, 120), assetPlugin(plugin, "presets/presets_projectM/"));
+    w->module = module;
+    w->font = font;
+    addChild(w);
+  }
+};
+
+
+struct EmbeddedMilkrackModuleWidget : BaseMilkrackModuleWidget {
+  EmbeddedMilkrackModuleWidget(MilkrackModule* module) : BaseMilkrackModuleWidget(module) {
+    setPanel(SVG::load(assetPlugin(plugin, "res/MilkrackModule.svg")));
+
+    addInput(Port::create<PJ301MPort>(Vec(15, 60), Port::INPUT, module, MilkrackModule::LEFT_INPUT));
+    addInput(Port::create<PJ301MPort>(Vec(15, 90), Port::INPUT, module, MilkrackModule::RIGHT_INPUT));
+
+    addParam(ParamWidget::create<TL1105>(Vec(19, 150), module, MilkrackModule::NEXT_PRESET_PARAM, 0.0, 1.0, 0.0));
+
+    std::shared_ptr<Font> font = Font::load(assetPlugin(plugin, "res/fonts/LiberationSans/LiberationSans-Regular.ttf"));
+    w = BaseProjectMWidget::create<EmbeddedProjectMWidget>(Vec(50, 10), assetPlugin(plugin, "presets/presets_projectM/"));
+    w->module = module;
+    w->font = font;
+    addChild(w);
+  }
+};
+
+Model *modelWindowedMilkrackModule = Model::create<MilkrackModule, MilkrackModuleWidget>("Milkrack", "Milkrack Windowed", "Milkrack - Windowed", VISUAL_TAG);
+Model *modelEmbeddedMilkrackModule = Model::create<MilkrackModule, EmbeddedMilkrackModuleWidget>("Milkrack", "Milkrack Embedded", "Milkrack - Embedded", VISUAL_TAG);

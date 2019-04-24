@@ -7,4 +7,5 @@ using namespace rack;
 extern Plugin *plugin;
 
 // Forward-declare each Model, defined in each module source file
-extern Model *modelMilkrackModule;
+extern Model *modelWindowedMilkrackModule;
+extern Model *modelEmbeddedMilkrackModule;
