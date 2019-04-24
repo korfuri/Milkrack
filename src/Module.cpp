@@ -29,30 +29,29 @@ struct MilkrackModule : Module {
   };
 
   MilkrackModule() : Module(NUM_PARAMS, NUM_INPUTS, NUM_OUTPUTS, NUM_LIGHTS) {}
-  void step() override;
 
   unsigned int i = 0;
   bool full = false;
   bool nextPreset = false;
   SchmittTrigger nextPresetTrig;
   float pcm_data[kSampleWindow];
+
+  void step() override {
+    pcm_data[i++] = inputs[LEFT_INPUT].value;
+    if (inputs[RIGHT_INPUT].active)
+      pcm_data[i++] = inputs[RIGHT_INPUT].value;
+    else
+      pcm_data[i++] = inputs[LEFT_INPUT].value;
+    if (i >= kSampleWindow) {
+      i = 0;
+      full = true;
+    }
+    if (nextPresetTrig.process(params[NEXT_PRESET_PARAM].value)) {
+      nextPreset = true;
+    }
+  }
 };
 
-
-void MilkrackModule::step() {
-  pcm_data[i++] = inputs[LEFT_INPUT].value;
-  if (inputs[RIGHT_INPUT].active)
-    pcm_data[i++] = inputs[RIGHT_INPUT].value;
-  else
-    pcm_data[i++] = inputs[LEFT_INPUT].value;
-  if (i >= kSampleWindow) {
-    i = 0;
-    full = true;
-  }
-  if (nextPresetTrig.process(params[NEXT_PRESET_PARAM].value)) {
-    nextPreset = true;
-  }
-}
 
 struct ProjectMWidget : FramebufferWidget {
   enum Status {
@@ -64,8 +63,6 @@ struct ProjectMWidget : FramebufferWidget {
     EXITING
   };
 
-  const float x = 360.0;
-  const float y = 360.0;
   const int fps = 60;
   const bool debug = true;
   const projectM::Settings s;
@@ -74,7 +71,7 @@ struct ProjectMWidget : FramebufferWidget {
 
   // Owned by the render thread
   GLFWwindow* window;
-  projectM* pm = nullptr;
+  projectM* pm = nullptr; // also accessed by the UI thread to list preset info
   bool dirtySize = false;
 
   // Owned by the main thread
@@ -82,12 +79,15 @@ struct ProjectMWidget : FramebufferWidget {
   std::thread renderThread;
 
   // Shared between threads
-  Status status = Status::NOT_INITIALIZED; // guarded by pm_m
+  Status status = Status::NOT_INITIALIZED;
   static const int kPresetIDRandom = -1; // Switch to a random preset
   static const int kPresetIDKeep = -2; // Keep the current preset
-  int requestPresetID = kPresetIDKeep; // guarded by pm_m // Indicates to the render thread that it should switch to the specified preset
-  bool requestToggleAutoplay = false; // guarded by pm_m
-  std::mutex pm_m;
+  int requestPresetID = kPresetIDKeep; // Indicates to the render thread that it should switch to the specified preset
+  bool requestToggleAutoplay = false;
+
+  // Mutexes
+  mutable std::mutex pm_m;
+  mutable std::mutex flags_m;
 
   ProjectMWidget(std::string presetURL) : s(initSettings(presetURL)),
 					  window(createWindow()),
@@ -103,22 +103,26 @@ struct ProjectMWidget : FramebufferWidget {
   ~ProjectMWidget() {
     {
       // Request that the render thread terminates the renderLoop
-      std::lock_guard <std::mutex> l(pm_m);
+      std::lock_guard <std::mutex> l(flags_m);
       if (status != Status::FAILED) {
 	status = Status::PLEASE_EXIT;
       }
     }
     // Wait for renderLoop to terminate before releasing resources
     renderThread.join();
+    // Destroy the window in the main thread, because it's not legal
+    // to do so in other threads.
+    glfwDestroyWindow(window);
   }
 
   void step() override {
     {
-      std::lock_guard<std::mutex> l(pm_m);
+      std::lock_guard<std::mutex> l(flags_m);
       if (status != Status::RENDERING) return;
     }
     dirty = true;
     if (module->full) {
+      std::lock_guard<std::mutex> l(pm_m);
       if (!pm) return;
       pm->pcm()->addPCMfloat_2ch(module->pcm_data, kSampleWindow);
       module->full = false;
@@ -128,13 +132,14 @@ struct ProjectMWidget : FramebufferWidget {
     // do so on the next pass.
     if (module->nextPreset) {
       module->nextPreset = false;
-      std::lock_guard<std::mutex> l(pm_m);
+      std::lock_guard<std::mutex> l(flags_m);
       requestPresetID = kPresetIDRandom;
     }
   }
 
   unsigned int activePreset() const {
     unsigned int presetIdx;
+    std::lock_guard<std::mutex> l(pm_m);
     if (!pm) return 0;
     pm->selectedPresetIndex(presetIdx);
     return presetIdx;
@@ -142,16 +147,28 @@ struct ProjectMWidget : FramebufferWidget {
 
   std::string activePresetName() const {
     unsigned int presetIdx;
+    std::unique_lock<std::mutex> l(pm_m);
     if (!pm) return "";
     if (pm->selectedPresetIndex(presetIdx)) {
-     return pm->getPresetName(presetIdx);
+      l.unlock();
+      return pm->getPresetName(presetIdx);
     }
     return "";
   }
 
+  void setRequestPresetID(int id) {
+    std::lock_guard<std::mutex> l(flags_m);
+    requestPresetID = id;
+  }
+
+  int getRequestPresetID() const {
+    std::lock_guard<std::mutex> l(flags_m);
+    return requestPresetID;
+  }
+
   void draw(NVGcontext* vg) override {
     nvgSave(vg);
-    nvgScissor(vg, 0, 0, x, y);
+    nvgScissor(vg, 0, 0, 15, 200);
     nvgBeginPath(vg);
     nvgFillColor(vg, nvgRGB(0x06, 0xbd, 0x01));
     nvgFontSize(vg, 14);
@@ -167,25 +184,30 @@ struct ProjectMWidget : FramebufferWidget {
   }
 
   void toggleAutoplay() {
-    std::lock_guard<std::mutex> l(pm_m);
+    std::lock_guard<std::mutex> l(flags_m);
     requestToggleAutoplay = true;
   }
 
+  // Assumes pm_m is held
   void renderSetAutoplay(bool enable) {
     if (!pm) return;
     pm->setPresetLock(!enable);
   }
 
   bool isAutoplayEnabled() const {
+    std::lock_guard<std::mutex> l(pm_m);
     if (!pm) return false;
     return !pm->isPresetLocked();
   }
 
-  std::list<std::pair<unsigned int, std::string> > listPresets() {
+  std::list<std::pair<unsigned int, std::string> > listPresets() const {
     std::list<std::pair<unsigned int, std::string> > presets;
-    std::lock_guard<std::mutex> l(pm_m);
-    if (!pm) return presets;
-    unsigned int n = pm->getPlaylistSize();
+    unsigned int n;
+    {
+      std::lock_guard<std::mutex> l(pm_m);
+      if (!pm) return presets;
+      n = pm->getPlaylistSize();
+    }
     if (!n) {
       return presets;
     }
@@ -198,7 +220,7 @@ struct ProjectMWidget : FramebufferWidget {
   void randomize() {
     // Tell the render thread to switch to another preset on the next
     // pass.
-    std::lock_guard<std::mutex> l(pm_m);
+    std::lock_guard<std::mutex> l(flags_m);
     requestPresetID = kPresetIDRandom;
   }
 
@@ -223,7 +245,7 @@ struct ProjectMWidget : FramebufferWidget {
     glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
     glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GL_TRUE);
     glfwWindowHint(GLFW_MAXIMIZED, GLFW_FALSE);
-    GLFWwindow* c = glfwCreateWindow(x, y, "", NULL, NULL);
+    GLFWwindow* c = glfwCreateWindow(320, 240, "", NULL, NULL);
 
     if (!c) {
       rack::loggerLog(DEBUG_LEVEL, "Milkrack/" __FILE__, __LINE__, "Milkrack renderLoop could not create a context, bailing.");
@@ -286,8 +308,9 @@ struct ProjectMWidget : FramebufferWidget {
   // Runs in renderThread. This function is responsible for the whole
   // lifetime of the rendering GL context and the projectM instance.
   void renderLoop() {
+    status = Status::FAILED;
     if (!window) {
-      std::lock_guard<std::mutex> l(pm_m);
+      std::lock_guard<std::mutex> l(flags_m);
       status = Status::FAILED;
       return;
     }
@@ -305,7 +328,7 @@ struct ProjectMWidget : FramebufferWidget {
     while (true) {
       {
 	{
-	  std::lock_guard<std::mutex> l(pm_m);
+	  std::lock_guard<std::mutex> l(flags_m);
 	  // Did the main thread request that we exit?
 	  if (status == Status::PLEASE_EXIT) {
 	    break;
@@ -321,7 +344,7 @@ struct ProjectMWidget : FramebufferWidget {
 	}
 
 	{
-	  std::lock_guard<std::mutex> l(pm_m);
+	  std::lock_guard<std::mutex> l(flags_m);
 	  // Did the main thread request an autoplay toggle?
 	  if (requestToggleAutoplay) {
 	    renderSetAutoplay(!isAutoplayEnabled());
@@ -339,14 +362,16 @@ struct ProjectMWidget : FramebufferWidget {
 	  }
 	}
 
-	pm->renderFrame();
+	{
+	  std::lock_guard<std::mutex> l(pm_m);
+	  pm->renderFrame();
+	}
 	glfwSwapBuffers(window);
       }
       usleep(1000000/fps);
     }
 
     delete pm;
-    glfwDestroyWindow(window);
     status = Status::EXITING;
   }
 
@@ -357,13 +382,13 @@ struct ProjectMWidget : FramebufferWidget {
   projectM::Settings initSettings(std::string presetURL) const {
     projectM::Settings s;
     s.presetURL = presetURL;
-    s.windowWidth = x;
-    s.windowHeight = y;
+    s.windowWidth = 320;
+    s.windowHeight = 240;
     return s;
   }
 
   // Switch to the next preset. This should be called only from the
-  // render thread. pm_m must be held when calling this.
+  // render thread.
   void renderLoopNextPreset() {
     unsigned int n = pm->getPlaylistSize();
     if (n) {
@@ -372,7 +397,7 @@ struct ProjectMWidget : FramebufferWidget {
   }
 
   // Switch to the indicated preset. This should be called only from
-  // the render thread. pm_m must be held when calling this.
+  // the render thread.
   void renderLoopSetPreset(unsigned int i) {
     unsigned int n = pm->getPlaylistSize();
     if (n && i < n) {
@@ -387,7 +412,7 @@ struct SetPresetMenuItem : MenuItem {
   unsigned int presetId;
 
   void onAction(EventAction& e) override {
-    w->requestPresetID = presetId;
+    w->setRequestPresetID(presetId);
   }
 
   void step() override {
