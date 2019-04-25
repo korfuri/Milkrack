@@ -208,6 +208,7 @@ void ProjectMRenderer::renderLoop(projectM::Settings s) {
   }
   
   delete pm;
+  pm = nullptr;
   glFinish(); // Finish any pending OpenGL operations
   setStatus(Status::EXITING);
 }
@@ -217,7 +218,7 @@ void ProjectMRenderer::logContextInfo(std::string name, GLFWwindow* w) const {
   int minor = glfwGetWindowAttrib(w, GLFW_CONTEXT_VERSION_MINOR);
   int revision = glfwGetWindowAttrib(w, GLFW_CONTEXT_REVISION);
   int api = glfwGetWindowAttrib(w, GLFW_CLIENT_API);
-  rack::loggerLog(rack::DEBUG_LEVEL, "Milkrack/" __FILE__, __LINE__, "%s context using API %d version %d.%d.%d, profile %d", name.c_str(), api, major, minor, revision);
+  rack::loggerLog(rack::DEBUG_LEVEL, "Milkrack/" __FILE__, __LINE__, "%s context using API %d version %d.%d.%d", name.c_str(), api, major, minor, revision);
 }
 
 void ProjectMRenderer::logGLFWError(int errcode, const char* errmsg) {
