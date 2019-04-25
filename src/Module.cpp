@@ -259,7 +259,7 @@ struct MilkrackModuleWidget : BaseMilkrackModuleWidget {
     addInput(Port::create<PJ301MPort>(Vec(15, 170), Port::INPUT, module, MilkrackModule::NEXT_PRESET_INPUT));
 
     std::shared_ptr<Font> font = Font::load(assetPlugin(plugin, "res/fonts/LiberationSans/LiberationSans-Regular.ttf"));
-    w = BaseProjectMWidget::create<WindowedProjectMWidget>(Vec(50, 20), assetPlugin(plugin, "presets/presets_projectM/"));
+    w = BaseProjectMWidget::create<WindowedProjectMWidget>(Vec(50, 20), assetPlugin(plugin, "presets_projectM/"));
     w->module = module;
     w->font = font;
     addChild(w);
@@ -278,7 +278,7 @@ struct EmbeddedMilkrackModuleWidget : BaseMilkrackModuleWidget {
     addInput(Port::create<PJ301MPort>(Vec(15, 170), Port::INPUT, module, MilkrackModule::NEXT_PRESET_INPUT));
 
     std::shared_ptr<Font> font = Font::load(assetPlugin(plugin, "res/fonts/LiberationSans/LiberationSans-Regular.ttf"));
-    w = BaseProjectMWidget::create<EmbeddedProjectMWidget>(Vec(50, 10), assetPlugin(plugin, "presets/presets_projectM/"));
+    w = BaseProjectMWidget::create<EmbeddedProjectMWidget>(Vec(50, 10), assetPlugin(plugin, "presets_projectM/"));
     w->module = module;
     w->font = font;
     addChild(w);
