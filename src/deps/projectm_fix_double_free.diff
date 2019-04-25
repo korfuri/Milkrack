@@ -1,0 +1,21 @@
+diff --git a/src/libprojectM/MilkdropPresetFactory/MilkdropPresetFactory.cpp b/src/libprojectM/MilkdropPresetFactory/MilkdropPresetFactory.cpp
+index ad966948..14306693 100644
+--- a/src/libprojectM/MilkdropPresetFactory/MilkdropPresetFactory.cpp
++++ b/src/libprojectM/MilkdropPresetFactory/MilkdropPresetFactory.cpp
+@@ -233,10 +233,10 @@ std::unique_ptr<Preset> MilkdropPresetFactory::allocate(const std::string & url,
+ // this gives the preset a way to return the PresetOutput w/o dependency on class projectM behavior
+ void MilkdropPresetFactory::releasePreset(Preset *preset_)
+ {
+-    MilkdropPreset *preset = (MilkdropPreset *)preset_;
+-    // return PresetOutputs to the cache
+-    if (nullptr == _presetOutputsCache)
+-        _presetOutputsCache = &preset->_presetOutputs;
+-    else
+-        delete &preset->_presetOutputs;
++    // MilkdropPreset *preset = (MilkdropPreset *)preset_;
++    // // return PresetOutputs to the cache
++    // if (nullptr == _presetOutputsCache)
++    //     _presetOutputsCache = &preset->_presetOutputs;
++    // else
++    //     delete &preset->_presetOutputs;
+ }

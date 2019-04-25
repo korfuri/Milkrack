@@ -44,7 +44,7 @@ include $(RACK_DIR)/plugin.mk
 dep: $(LIBPROJECTM)
 
 src/deps/projectm/src/libprojectM/.libs/libprojectM.a:
-	(cd src/deps/projectm; git apply ../projectm_fix_shader.diff || true)
+	(cd src/deps/projectm; git apply ../projectm_*.diff || true)
 	(cd src/deps/projectm; ./autogen.sh)
 	(cd src/deps/projectm; ./configure --with-pic --enable-static --disable-threading)
 	(cd src/deps/projectm; make)
