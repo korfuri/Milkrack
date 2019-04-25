@@ -18,6 +18,7 @@ struct MilkrackModule : Module {
   };
   enum InputIds {
     LEFT_INPUT, RIGHT_INPUT,
+    NEXT_PRESET_INPUT,
     NUM_INPUTS
   };
   enum OutputIds {
@@ -45,7 +46,7 @@ struct MilkrackModule : Module {
       i = 0;
       full = true;
     }
-    if (nextPresetTrig.process(params[NEXT_PRESET_PARAM].value)) {
+    if (nextPresetTrig.process(params[NEXT_PRESET_PARAM].value + inputs[NEXT_PRESET_INPUT].value)) {
       nextPreset = true;
     }
   }
@@ -123,15 +124,17 @@ struct WindowedProjectMWidget : BaseProjectMWidget {
 
   void draw(NVGcontext* vg) override {
     nvgSave(vg);
-    nvgScissor(vg, 0, 0, 15, 200);
     nvgBeginPath(vg);
     nvgFillColor(vg, nvgRGB(0x06, 0xbd, 0x01));
     nvgFontSize(vg, 14);
     nvgFontFaceId(vg, font->handle);
     nvgTextAlign(vg, NVG_ALIGN_BOTTOM);
-    nvgText(vg, 10, 20, getRenderer()->activePresetName().c_str(), nullptr);
+    nvgScissor(vg, 5, 5, 20, 330);
+    nvgRotate(vg, M_PI/2);
     if (!getRenderer()->isRendering()) {
-      nvgText(vg, 10, 100, "Unable to initialize rendering. See log for details.", nullptr);
+      nvgText(vg, 5, -7, "Unable to initialize rendering. See log for details.", nullptr);
+    } else {
+      nvgText(vg, 5, -7, getRenderer()->activePresetName().c_str(), nullptr);
     }
     nvgFill(vg);
     nvgClosePath(vg);
@@ -253,9 +256,10 @@ struct MilkrackModuleWidget : BaseMilkrackModuleWidget {
     addInput(Port::create<PJ301MPort>(Vec(15, 90), Port::INPUT, module, MilkrackModule::RIGHT_INPUT));
 
     addParam(ParamWidget::create<TL1105>(Vec(19, 150), module, MilkrackModule::NEXT_PRESET_PARAM, 0.0, 1.0, 0.0));
+    addInput(Port::create<PJ301MPort>(Vec(15, 170), Port::INPUT, module, MilkrackModule::NEXT_PRESET_INPUT));
 
     std::shared_ptr<Font> font = Font::load(assetPlugin(plugin, "res/fonts/LiberationSans/LiberationSans-Regular.ttf"));
-    w = BaseProjectMWidget::create<WindowedProjectMWidget>(Vec(15, 120), assetPlugin(plugin, "presets/presets_projectM/"));
+    w = BaseProjectMWidget::create<WindowedProjectMWidget>(Vec(50, 20), assetPlugin(plugin, "presets/presets_projectM/"));
     w->module = module;
     w->font = font;
     addChild(w);
@@ -271,6 +275,7 @@ struct EmbeddedMilkrackModuleWidget : BaseMilkrackModuleWidget {
     addInput(Port::create<PJ301MPort>(Vec(15, 90), Port::INPUT, module, MilkrackModule::RIGHT_INPUT));
 
     addParam(ParamWidget::create<TL1105>(Vec(19, 150), module, MilkrackModule::NEXT_PRESET_PARAM, 0.0, 1.0, 0.0));
+    addInput(Port::create<PJ301MPort>(Vec(15, 170), Port::INPUT, module, MilkrackModule::NEXT_PRESET_INPUT));
 
     std::shared_ptr<Font> font = Font::load(assetPlugin(plugin, "res/fonts/LiberationSans/LiberationSans-Regular.ttf"));
     w = BaseProjectMWidget::create<EmbeddedProjectMWidget>(Vec(50, 10), assetPlugin(plugin, "presets/presets_projectM/"));

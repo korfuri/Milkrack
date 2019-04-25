@@ -208,6 +208,7 @@ void ProjectMRenderer::renderLoop(projectM::Settings s) {
   }
   
   delete pm;
+  glFinish(); // Finish any pending OpenGL operations
   setStatus(Status::EXITING);
 }
 
