@@ -206,9 +206,12 @@ void ProjectMRenderer::renderLoop(projectM::Settings s) {
     }
     usleep(1000000/60); // TODO fps
   }
-  
-  delete pm;
-  pm = nullptr;
+
+  {
+    std::lock_guard<std::mutex> l(pm_m);
+    delete pm;
+    pm = nullptr;
+  }
   glFinish(); // Finish any pending OpenGL operations
   setStatus(Status::EXITING);
 }
