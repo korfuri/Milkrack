@@ -7,7 +7,7 @@ SLUG = Milkrack
 
 # Must follow the format in the Versioning section of
 # https://vcvrack.com/manual/PluginDevelopmentTutorial.html
-VERSION = 0.6.0
+VERSION = 0.6.1
 
 # Platform detection
 include $(RACK_DIR)/arch.mk
