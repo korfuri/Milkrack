@@ -285,5 +285,5 @@ struct EmbeddedMilkrackModuleWidget : BaseMilkrackModuleWidget {
   }
 };
 
-Model *modelWindowedMilkrackModule = Model::create<MilkrackModule, MilkrackModuleWidget>("Milkrack", "Milkrack Windowed", "Milkrack - Windowed", VISUAL_TAG);
-Model *modelEmbeddedMilkrackModule = Model::create<MilkrackModule, EmbeddedMilkrackModuleWidget>("Milkrack", "Milkrack Embedded", "Milkrack - Embedded", VISUAL_TAG);
+Model *modelWindowedMilkrackModule = Model::create<MilkrackModule, MilkrackModuleWidget>("Milkrack", "Milkrack Windowed", "Milkrack - Window mode", VISUAL_TAG);
+Model *modelEmbeddedMilkrackModule = Model::create<MilkrackModule, EmbeddedMilkrackModuleWidget>("Milkrack", "Milkrack Embedded", "Milkrack - Embedded mode", VISUAL_TAG);
