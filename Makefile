@@ -46,8 +46,8 @@ dep: $(LIBPROJECTM)
 src/deps/projectm/src/libprojectM/.libs/libprojectM.a:
 	(cd src/deps/projectm; git apply ../projectm_*.diff || true)
 	(cd src/deps/projectm; ./autogen.sh)
-	(cd src/deps/projectm; ./configure --with-pic --enable-static --disable-threading)
-	(cd src/deps/projectm; make)
+	(cd src/deps/projectm; export CFLAGS=-I$(shell pwd)/src/deps/glm CXXFLAGS=-I$(shell pwd)/src/deps/glm ; ./configure --with-pic --enable-static --disable-threading)
+	(cd src/deps/projectm; export CFLAGS=-I$(shell pwd)/src/deps/glm CXXFLAGS=-I$(shell pwd)/src/deps/glm ; make)
 
 depclean:
 	(cd src/deps/projectm; make clean)

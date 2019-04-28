@@ -13,12 +13,10 @@ addons:
     packages:
     - autoconf
     - libtool
-    - libglm-dev
     - libgl1-mesa-dev
     - libglu1-mesa-dev
   homebrew:
     packages:
-    - glm
     - sdl2
     - automake
     - libtool
