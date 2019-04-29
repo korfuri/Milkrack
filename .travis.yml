@@ -12,12 +12,9 @@ addons:
   apt:
     packages:
     - autoconf
-    - libtool
-    - libgl1-mesa-dev
     - libglu1-mesa-dev
   homebrew:
     packages:
-    - sdl2
     - automake
     - libtool
     - pkg-config
