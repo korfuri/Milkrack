@@ -25,7 +25,7 @@ ifdef ARCH_WIN
 endif
 
 ifdef ARCH_WIN
-	LIBPROJECTM = libs/win/libprojectM/libprojectM.a
+	LIBPROJECTM = libs/win/libprojectM/libprojectM.lib
 else
 	LIBPROJECTM = src/deps/projectm/src/libprojectM/.libs/libprojectM.a
 endif
