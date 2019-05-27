@@ -25,8 +25,8 @@ ifdef ARCH_WIN
 endif
 
 ifdef ARCH_WIN
-	LIBPROJECTM = libs/win/libprojectM/libprojectM.lib
-	LDFLAGS += -L$(CURDIR)/libs/win/libprojectM -l:libprojectM.lib
+	LIBPROJECTM = libs/win/libprojectM/libprojectM.a
+	LDFLAGS += -L$(CURDIR)/libs/win/libprojectM -lprojectM
 else
 	LIBPROJECTM = src/deps/projectm/src/libprojectM/.libs/libprojectM.a
 	OBJECTS += $(LIBPROJECTM)
@@ -43,6 +43,10 @@ DISTRIBUTABLES += $(wildcard LICENSE*) res src/deps/projectm/presets/presets_pro
 include $(RACK_DIR)/plugin.mk
 
 dep: $(LIBPROJECTM)
+
+libs/win/libprojectM/libprojectM.a: libs/win/libprojectM/libprojectM.lib
+	choco upgrade mingw
+	(cd libs/win/libprojectM; ../../../reimp/src/reimp.exe -c libprojectM.lib)
 
 src/deps/projectm/src/libprojectM/.libs/libprojectM.a:
 	(cd src/deps/projectm; git apply ../projectm_*.diff || true)
