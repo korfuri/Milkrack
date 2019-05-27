@@ -1,14 +1,6 @@
 # If RACK_DIR is not defined when calling the Makefile, default to two directories above
 RACK_DIR ?= ../..
 
-# Must follow the format in the Naming section of
-# https://vcvrack.com/manual/PluginDevelopmentTutorial.html
-SLUG = Milkrack
-
-# Must follow the format in the Versioning section of
-# https://vcvrack.com/manual/PluginDevelopmentTutorial.html
-VERSION = 0.6.1
-
 # Platform detection
 include $(RACK_DIR)/arch.mk
 
