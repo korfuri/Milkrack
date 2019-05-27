@@ -45,6 +45,7 @@ include $(RACK_DIR)/plugin.mk
 dep: $(LIBPROJECTM)
 
 libs/win/libprojectM/libprojectM.a: libs/win/libprojectM/libprojectM.lib
+	choco upgrade mingw
 	(cd libs/win/libprojectM; gendef libprojectM.lib)
 	(cd libs/win/libprojectM; dlltool -D libprojectM.lib -d libprojectM.def -l libprojectM.a)
 
