@@ -24,13 +24,13 @@ ifdef ARCH_WIN
 	LDFLAGS += -shared -Wl,--export-all-symbols -lopengl32
 endif
 
-# ifdef ARCH_WIN
-# 	LIBPROJECTM = libs/win/libprojectM/libprojectM.lib
-# 	LDFLAGS += -L$(CURDIR)/libs/win/libprojectM -lprojectM
-# else
-LIBPROJECTM = src/deps/projectm/src/libprojectM/.libs/libprojectM.a
-OBJECTS += $(LIBPROJECTM)
-#endif
+ifdef ARCH_WIN
+	LIBPROJECTM = libs/win/libprojectM/libprojectM.a
+	LDFLAGS += -L$(CURDIR)/libs/win/libprojectM -lprojectM
+else
+	LIBPROJECTM = src/deps/projectm/src/libprojectM/.libs/libprojectM.a
+	OBJECTS += $(LIBPROJECTM)
+endif
 
 # Add .cpp and .c files to the build
 SOURCES += $(wildcard src/*.cpp)
@@ -43,6 +43,10 @@ DISTRIBUTABLES += $(wildcard LICENSE*) res src/deps/projectm/presets/presets_pro
 include $(RACK_DIR)/plugin.mk
 
 dep: $(LIBPROJECTM)
+
+libs/win/libprojectM/libprojectM.a: libs/win/libprojectM/libprojectM.lib
+	(cd libs/win/libprojectM; gendef libprojectM.lib)
+	(cd libs/win/libprojectM; dlltool -D libprojectM.lib -d libprojectM.def -l libprojectM.a)
 
 src/deps/projectm/src/libprojectM/.libs/libprojectM.a:
 	(cd src/deps/projectm; git apply ../projectm_*.diff || true)
