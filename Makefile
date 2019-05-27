@@ -25,7 +25,7 @@ ifdef ARCH_WIN
 endif
 
 ifdef ARCH_WIN
-	LIBPROJECTM = libs/win/libprojectM/libprojectM.lib
+	LIBPROJECTM = $(CURDIR)/libs/win/libprojectM/libprojectM.lib
 	LDFLAGS += -Llibs/win/libprojectM -lprojectM
 else
 	LIBPROJECTM = src/deps/projectm/src/libprojectM/.libs/libprojectM.a
