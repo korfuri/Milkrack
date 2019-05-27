@@ -24,13 +24,13 @@ ifdef ARCH_WIN
 	LDFLAGS += -shared -Wl,--export-all-symbols -lopengl32
 endif
 
-ifdef ARCH_WIN
-	LIBPROJECTM = libs/win/libprojectM/libprojectM.lib
-	LDFLAGS += -L$(CURDIR)/libs/win/libprojectM -lprojectM
-else
-	LIBPROJECTM = src/deps/projectm/src/libprojectM/.libs/libprojectM.a
-	OBJECTS += $(LIBPROJECTM)
-endif
+# ifdef ARCH_WIN
+# 	LIBPROJECTM = libs/win/libprojectM/libprojectM.lib
+# 	LDFLAGS += -L$(CURDIR)/libs/win/libprojectM -lprojectM
+# else
+LIBPROJECTM = src/deps/projectm/src/libprojectM/.libs/libprojectM.a
+OBJECTS += $(LIBPROJECTM)
+#endif
 
 # Add .cpp and .c files to the build
 SOURCES += $(wildcard src/*.cpp)
