@@ -46,6 +46,7 @@ dep: $(LIBPROJECTM)
 
 libs/win/libprojectM/libprojectM.a: libs/win/libprojectM/libprojectM.lib
 	(cd libs/win/libprojectM; ../../../reimp/src/reimp.exe -c libprojectM.lib)
+	ls -laR libs/
 
 src/deps/projectm/src/libprojectM/.libs/libprojectM.a:
 	(cd src/deps/projectm; git apply ../projectm_*.diff || true)
