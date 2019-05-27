@@ -18,6 +18,7 @@ addons:
     - automake
     - libtool
     - pkg-config
+    - jq
 git:
   submodules: true
 env:
