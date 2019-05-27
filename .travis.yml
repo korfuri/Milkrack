@@ -8,7 +8,7 @@ matrix:
     before_install:
     - choco install make -y
     - choco install zip -y
-    - (mkdir reimp && cd reimp && wget "http://wyw.dcweb.cn/download.asp?path=&file=reimp_new.zip" && unzip reimp_new.zip && cd src && make)
+    - (mkdir reimp && cd reimp && wget -O reimp_new.zip "http://wyw.dcweb.cn/download.asp?path=&file=reimp_new.zip" && unzip reimp_new.zip && cd src && make)
 addons:
   apt:
     packages:
