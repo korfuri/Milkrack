@@ -26,11 +26,11 @@ endif
 
 ifdef ARCH_WIN
 	LIBPROJECTM = libs/win/libprojectM/libprojectM.a
-	LDFLAGS += -L$(CURDIR)/libs/win/libprojectM -lprojectM
 else
 	LIBPROJECTM = src/deps/projectm/src/libprojectM/.libs/libprojectM.a
-	OBJECTS += $(LIBPROJECTM)
 endif
+	OBJECTS += $(LIBPROJECTM)
+
 
 # Add .cpp and .c files to the build
 SOURCES += $(wildcard src/*.cpp)
