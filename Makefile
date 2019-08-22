@@ -35,8 +35,8 @@ src/deps/projectm/src/libprojectM/.libs/libprojectM.a:
 	(cd src/deps/projectm; git apply ../projectm_*.diff || true)
 ifndef ARCH_WIN
 	(cd src/deps/projectm; ./autogen.sh)
-endif
 	(cd src/deps/projectm; export CFLAGS=-I$(shell pwd)/src/deps/glm CXXFLAGS=-I$(shell pwd)/src/deps/glm ; ./configure --with-pic --enable-static --disable-threading)
+endif
 	(cd src/deps/projectm; export CFLAGS=-I$(shell pwd)/src/deps/glm CXXFLAGS=-I$(shell pwd)/src/deps/glm ; make)
 
 depclean:
