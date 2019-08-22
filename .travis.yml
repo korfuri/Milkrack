@@ -27,7 +27,7 @@ env:
 install:
 - mkdir -p "${HOME}"/Rack
 - pushd "${HOME}"/Rack
-- curl -o Rack-SDK.zip https://vcvrack.com/downloads/Rack-SDK-1.dev.ddf06a9.zip
+- curl -o Rack-SDK.zip https://vcvrack.com/downloads/Rack-SDK-1.1.2.zip
 - unzip Rack-SDK.zip
 - popd
 script:
