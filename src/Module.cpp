@@ -1,8 +1,5 @@
 #define NANOVG_GL2
-#include "window.hpp"
 #include "Milkrack.hpp"
-#include "widgets.hpp"
-#include "dsp/digital.hpp"
 #include "nanovg_gl.h"
 #include "deps/projectm/src/libprojectM/projectM.hpp"
 #include "Renderer.hpp"
@@ -28,12 +25,15 @@ struct MilkrackModule : Module {
     NUM_LIGHTS
   };
 
-  MilkrackModule() : Module(NUM_PARAMS, NUM_INPUTS, NUM_OUTPUTS, NUM_LIGHTS) {}
+  MilkrackModule() {
+    config(NUM_PARAMS, NUM_INPUTS, NUM_OUTPUTS, NUM_LIGHTS);
+    configParam(NEXT_PRESET_PARAM, 0.0, 1.0, 0.0);
+  }
 
   unsigned int i = 0;
   bool full = false;
   bool nextPreset = false;
-  SchmittTrigger nextPresetTrig;
+  dsp::SchmittTrigger nextPresetTrig;
   float pcm_data[kSampleWindow];
 
   void step() override {
@@ -183,7 +183,7 @@ struct SetPresetMenuItem : MenuItem {
   BaseProjectMWidget* w;
   unsigned int presetId;
 
-  void onAction(EventAction& e) override {
+  void onAction(const event::Action& e) override {
     w->getRenderer()->requestPresetID(presetId);
   }
 
@@ -204,7 +204,7 @@ struct SetPresetMenuItem : MenuItem {
 struct ToggleAutoplayMenuItem : MenuItem {
   BaseProjectMWidget* w;
 
-  void onAction(EventAction& e) override {
+  void onAction(const event::Action& e) override {
     w->getRenderer()->requestToggleAutoplay();
   }
 
@@ -225,11 +225,13 @@ struct ToggleAutoplayMenuItem : MenuItem {
 struct BaseMilkrackModuleWidget : ModuleWidget {
   BaseProjectMWidget* w;
 
-  using ModuleWidget::ModuleWidget;
-
-  void randomize() override {
-    w->randomize();
+  BaseMilkrackModuleWidget(Module* module) {
+    setModule(module);
   }
+
+  // void randomize() override {
+  //   w->randomize();
+  // }
 
   void appendContextMenu(Menu* menu) override {
     MilkrackModule* m = dynamic_cast<MilkrackModule*>(module);
@@ -250,16 +252,16 @@ struct BaseMilkrackModuleWidget : ModuleWidget {
 
 struct MilkrackModuleWidget : BaseMilkrackModuleWidget {
   MilkrackModuleWidget(MilkrackModule* module) : BaseMilkrackModuleWidget(module) {
-    setPanel(SVG::load(assetPlugin(plugin, "res/MilkrackSeparateWindow.svg")));
+    setPanel(APP->window->loadSvg(asset::plugin(pluginInstance, "res/MilkrackSeparateWindow.svg")));
 
-    addInput(Port::create<PJ301MPort>(Vec(15, 60), Port::INPUT, module, MilkrackModule::LEFT_INPUT));
-    addInput(Port::create<PJ301MPort>(Vec(15, 90), Port::INPUT, module, MilkrackModule::RIGHT_INPUT));
+    addInput(createInput<PJ301MPort>(Vec(15, 60), module, MilkrackModule::LEFT_INPUT));
+    addInput(createInput<PJ301MPort>(Vec(15, 90), module, MilkrackModule::RIGHT_INPUT));
 
-    addParam(ParamWidget::create<TL1105>(Vec(19, 150), module, MilkrackModule::NEXT_PRESET_PARAM, 0.0, 1.0, 0.0));
-    addInput(Port::create<PJ301MPort>(Vec(15, 170), Port::INPUT, module, MilkrackModule::NEXT_PRESET_INPUT));
+    addParam(createParam<TL1105>(Vec(19, 150), module, MilkrackModule::NEXT_PRESET_PARAM));
+    addInput(createInput<PJ301MPort>(Vec(15, 170), module, MilkrackModule::NEXT_PRESET_INPUT));
 
-    std::shared_ptr<Font> font = Font::load(assetPlugin(plugin, "res/fonts/LiberationSans/LiberationSans-Regular.ttf"));
-    w = BaseProjectMWidget::create<WindowedProjectMWidget>(Vec(50, 20), assetPlugin(plugin, "presets_projectM/"));
+    std::shared_ptr<Font> font = APP->window->loadFont(asset::plugin(pluginInstance, "res/fonts/LiberationSans/LiberationSans-Regular.ttf"));
+    w = BaseProjectMWidget::create<WindowedProjectMWidget>(Vec(50, 20), asset::plugin(pluginInstance, "presets_projectM/"));
     w->module = module;
     w->font = font;
     addChild(w);
@@ -269,21 +271,21 @@ struct MilkrackModuleWidget : BaseMilkrackModuleWidget {
 
 struct EmbeddedMilkrackModuleWidget : BaseMilkrackModuleWidget {
   EmbeddedMilkrackModuleWidget(MilkrackModule* module) : BaseMilkrackModuleWidget(module) {
-    setPanel(SVG::load(assetPlugin(plugin, "res/MilkrackModule.svg")));
+    setPanel(APP->window->loadSvg(asset::plugin(pluginInstance, "res/MilkrackModule.svg")));
 
-    addInput(Port::create<PJ301MPort>(Vec(15, 60), Port::INPUT, module, MilkrackModule::LEFT_INPUT));
-    addInput(Port::create<PJ301MPort>(Vec(15, 90), Port::INPUT, module, MilkrackModule::RIGHT_INPUT));
+    addInput(createInput<PJ301MPort>(Vec(15, 60), module, MilkrackModule::LEFT_INPUT));
+    addInput(createInput<PJ301MPort>(Vec(15, 90), module, MilkrackModule::RIGHT_INPUT));
 
-    addParam(ParamWidget::create<TL1105>(Vec(19, 150), module, MilkrackModule::NEXT_PRESET_PARAM, 0.0, 1.0, 0.0));
-    addInput(Port::create<PJ301MPort>(Vec(15, 170), Port::INPUT, module, MilkrackModule::NEXT_PRESET_INPUT));
+    addParam(createParam<TL1105>(Vec(19, 150), module, MilkrackModule::NEXT_PRESET_PARAM));
+    addInput(createInput<PJ301MPort>(Vec(15, 170), module, MilkrackModule::NEXT_PRESET_INPUT));
 
-    std::shared_ptr<Font> font = Font::load(assetPlugin(plugin, "res/fonts/LiberationSans/LiberationSans-Regular.ttf"));
-    w = BaseProjectMWidget::create<EmbeddedProjectMWidget>(Vec(50, 10), assetPlugin(plugin, "presets_projectM/"));
+    std::shared_ptr<Font> font = APP->window->loadFont(asset::plugin(pluginInstance, "res/fonts/LiberationSans/LiberationSans-Regular.ttf"));
+    w = BaseProjectMWidget::create<EmbeddedProjectMWidget>(Vec(50, 10), asset::plugin(pluginInstance, "presets_projectM/"));
     w->module = module;
     w->font = font;
     addChild(w);
   }
 };
 
-Model *modelWindowedMilkrackModule = Model::create<MilkrackModule, MilkrackModuleWidget>("Milkrack", "Milkrack Windowed", "Milkrack - Window mode", VISUAL_TAG);
-Model *modelEmbeddedMilkrackModule = Model::create<MilkrackModule, EmbeddedMilkrackModuleWidget>("Milkrack", "Milkrack Embedded", "Milkrack - Embedded mode", VISUAL_TAG);
+Model *modelWindowedMilkrackModule = createModel<MilkrackModule, MilkrackModuleWidget>("Milkrack_Windowed");
+Model *modelEmbeddedMilkrackModule = createModel<MilkrackModule, EmbeddedMilkrackModuleWidget>("Milkrack_Embedded");

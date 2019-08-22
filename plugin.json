@@ -1,0 +1,31 @@
+{
+  "slug": "Milkrack",
+  "name": "Milkrack",
+  "version": "1.0.0",
+  "license": "LGPL",
+  "author": "korfuri",
+  "authorEmail": "korfuri@gmail.com",
+  "authorUrl": "https://github.com/korfuri",
+  "pluginUrl": "https://github.com/korfuri/Milkrack",
+  "manualUrl": "https://github.com/korfuri/Milkrack",
+  "sourceUrl": "https://github.com/korfuri/Milkrack",
+  "donateUrl": "",
+  "modules": [
+    {
+      "slug": "Milkrack_Windowed",
+      "name": "Milkrack_Windowed",
+      "description": "Milkrack (windowed)",
+      "tags": [
+        "Visual"
+      ]
+    },
+    {
+      "slug": "Milkrack_Embedded",
+      "name": "Milkrack_Embedded",
+      "description": "Milkrack (Embedded)",
+      "tags": [
+        "Visual"
+      ]
+    }
+  ]
+}

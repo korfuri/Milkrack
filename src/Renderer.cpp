@@ -1,11 +1,11 @@
 #define NANOVG_GL2
+#include "app.hpp"
 #include "window.hpp"
-
 #include "Renderer.hpp"
 #include "GLFW/glfw3.h"
 #include "deps/projectm/src/libprojectM/projectM.hpp"
 #include "glfwUtils.hpp"
-#include "util/common.hpp"
+#include "logger.hpp"
 #include <thread>
 #include <mutex>
 
@@ -221,11 +221,11 @@ void ProjectMRenderer::logContextInfo(std::string name, GLFWwindow* w) const {
   int minor = glfwGetWindowAttrib(w, GLFW_CONTEXT_VERSION_MINOR);
   int revision = glfwGetWindowAttrib(w, GLFW_CONTEXT_REVISION);
   int api = glfwGetWindowAttrib(w, GLFW_CLIENT_API);
-  rack::loggerLog(rack::DEBUG_LEVEL, "Milkrack/" __FILE__, __LINE__, "%s context using API %d version %d.%d.%d", name.c_str(), api, major, minor, revision);
+  rack::logger::log(rack::logger::DEBUG_LEVEL, "Milkrack/" __FILE__, __LINE__, "%s context using API %d version %d.%d.%d", name.c_str(), api, major, minor, revision);
 }
 
 void ProjectMRenderer::logGLFWError(int errcode, const char* errmsg) {
-  rack::loggerLog(rack::WARN_LEVEL, "Milkrack/" __FILE__, 0, "GLFW error %d: %s", errcode, errmsg);
+  rack::logger::log(rack::logger::WARN_LEVEL, "Milkrack/" __FILE__, 0, "GLFW error %d: %s", errcode, errmsg);
 }
 
 GLFWwindow* WindowedRenderer::createWindow() {
@@ -238,7 +238,7 @@ GLFWwindow* WindowedRenderer::createWindow() {
   glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GL_TRUE);
   GLFWwindow* c = glfwCreateWindow(360, 360, "", NULL, NULL);  
   if (!c) {
-    rack::loggerLog(rack::DEBUG_LEVEL, "Milkrack/" __FILE__, __LINE__, "Milkrack renderLoop could not create a context, bailing.");
+    rack::logger::log(rack::logger::DEBUG_LEVEL, "Milkrack/" __FILE__, __LINE__, "Milkrack renderLoop could not create a context, bailing.");
     return nullptr;
   }
   glfwSetWindowUserPointer(c, reinterpret_cast<void*>(this));
@@ -297,15 +297,15 @@ void WindowedRenderer::keyCallback(GLFWwindow* win, int key, int scancode, int a
 
 GLFWwindow* TextureRenderer::createWindow() {
   glfwSetErrorCallback(logGLFWError);
-  logContextInfo("gWindow", rack::gWindow);
+  logContextInfo("gWindow", rack::APP->window->win);
   glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
   glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
   glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
   glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GL_TRUE);
   glfwWindowHint(GLFW_VISIBLE, GLFW_FALSE);
-  GLFWwindow* c = glfwCreateWindow(360, 360, "", NULL, rack::gWindow);
+  GLFWwindow* c = glfwCreateWindow(360, 360, "", NULL, rack::APP->window->win);
   if (!c) {
-    rack::loggerLog(rack::DEBUG_LEVEL, "Milkrack/" __FILE__, __LINE__, "Milkrack renderLoop could not create a context, bailing.");
+    rack::logger::log(rack::logger::DEBUG_LEVEL, "Milkrack/" __FILE__, __LINE__, "Milkrack renderLoop could not create a context, bailing.");
     return nullptr;
   }
   logContextInfo("Milkrack context", c);

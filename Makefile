@@ -1,14 +1,6 @@
 # If RACK_DIR is not defined when calling the Makefile, default to two directories above
 RACK_DIR ?= ../..
 
-# Must follow the format in the Naming section of
-# https://vcvrack.com/manual/PluginDevelopmentTutorial.html
-SLUG = Milkrack
-
-# Must follow the format in the Versioning section of
-# https://vcvrack.com/manual/PluginDevelopmentTutorial.html
-VERSION = 0.6.1
-
 # Platform detection
 include $(RACK_DIR)/arch.mk
 
@@ -24,11 +16,7 @@ ifdef ARCH_WIN
 	LDFLAGS += -shared -Wl,--export-all-symbols -lopengl32
 endif
 
-ifdef ARCH_WIN
-	LIBPROJECTM = libs/win/libprojectM/libprojectM.a
-else
-	LIBPROJECTM = src/deps/projectm/src/libprojectM/.libs/libprojectM.a
-endif
+LIBPROJECTM = src/deps/projectm/src/libprojectM/.libs/libprojectM.a
 OBJECTS += $(LIBPROJECTM)
 
 # Add .cpp and .c files to the build
@@ -45,8 +33,10 @@ dep: $(LIBPROJECTM)
 
 src/deps/projectm/src/libprojectM/.libs/libprojectM.a:
 	(cd src/deps/projectm; git apply ../projectm_*.diff || true)
+ifndef ARCH_WIN
 	(cd src/deps/projectm; ./autogen.sh)
 	(cd src/deps/projectm; export CFLAGS=-I$(shell pwd)/src/deps/glm CXXFLAGS=-I$(shell pwd)/src/deps/glm ; ./configure --with-pic --enable-static --disable-threading)
+endif
 	(cd src/deps/projectm; export CFLAGS=-I$(shell pwd)/src/deps/glm CXXFLAGS=-I$(shell pwd)/src/deps/glm ; make)
 
 depclean:

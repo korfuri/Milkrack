@@ -18,6 +18,7 @@ addons:
     - automake
     - libtool
     - pkg-config
+    - jq
 git:
   submodules: true
 env:
@@ -26,7 +27,7 @@ env:
 install:
 - mkdir -p "${HOME}"/Rack
 - pushd "${HOME}"/Rack
-- curl -o Rack-SDK.zip https://vcvrack.com/downloads/Rack-SDK-0.6.2.zip
+- curl -o Rack-SDK.zip https://vcvrack.com/downloads/Rack-SDK-1.1.2.zip
 - unzip Rack-SDK.zip
 - popd
 script:
